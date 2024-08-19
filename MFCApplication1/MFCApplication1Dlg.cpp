@@ -249,7 +249,7 @@ void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEIT
 }
 
 
-
+// Tree Control에 디렉토리 목록 뿌려주기
 void CMFCApplication1Dlg::OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
