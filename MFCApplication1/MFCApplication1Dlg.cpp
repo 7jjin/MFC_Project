@@ -9,6 +9,7 @@
 #include "afxdialogex.h"
 #include "afxinet.h"
 #include "ShlObj.h"
+#include "direct.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -33,6 +34,9 @@ public:
 // 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
+private:
+	CInternetSession* m_pInternetSession;
+	CFtpConnection* m_pFtpConnection;
 };
 
 CAboutDlg::CAboutDlg() : CDialogEx(IDD_ABOUTBOX)
@@ -82,7 +86,7 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CONNECT, &CMFCApplication1Dlg::OnBnClickedButtonConnect)
 	ON_BN_CLICKED(IDC_BUTTON_DISCONNECT, &CMFCApplication1Dlg::OnBnClickedButtonDisconnect)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE1, &CMFCApplication1Dlg::OnTvnSelchangedTree1)
-	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE2, &CMFCApplication1Dlg::OnTvnSelchangedTree2)
+
 END_MESSAGE_MAP()
 
 
@@ -230,36 +234,7 @@ void CMFCApplication1Dlg::OnBnClickedButtonDisconnect()
 	}
 }
 
-// 내 디렉토리 목록을 가져와서 트리뷰에 뿌려주는 메서드
-void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem)
-{
-	CFileFind finder;
-	CString strWildcard(strPath);
-	strWildcard += _T("\\*.*");
 
-	BOOL bWorking = finder.FindFile(strWildcard);
-	int nIndex = 0;
-	while (bWorking)
-	{
-		bWorking = finder.FindNextFile();
-
-		// '.' 및 '..'을 건너뜁니다.
-		if (finder.IsDots())
-			continue;
-
-		CString strFilePath = finder.GetFilePath();
-		CString strFileName = finder.GetFileName();
-
-		// 트리 컨트롤에 아이템 추가
-		HTREEITEM hItem = m_TreeCtrl.InsertItem(strFileName, hParentItem);
-
-		// 디렉토리인 경우, 재귀적으로 하위 디렉토리를 추가합니다.
-		if (finder.IsDirectory())
-		{
-			LoadDirectoryStructure(strFilePath, hItem);
-		}
-	}
-}
 
 
 // 클릭한 TreeView의 디레토리 목록을 ListView에 보여주는 메서드
@@ -343,102 +318,85 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 	return strPath;
 }
 
-// FTP 디렉토리 목록을 가져오는 메서드
-void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, CString strPath, HTREEITEM hParentItem)
+
+void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem)
 {
 	CFtpFileFind finder(pFtpConnection);
-	CString strSearchPath = strPath + _T("/*.*");
+	CString strSearchPath = strPath;
 
+	// 경로가 '/'로 끝나지 않으면 추가
+	if (strSearchPath.Right(1) != _T("/"))
+		strSearchPath += _T("/");
+
+	// 와일드카드 추가
+	strSearchPath += _T("*");
+
+	// 파일 및 디렉토리 검색 시작
 	BOOL bWorking = finder.FindFile(strSearchPath);
-	while (bWorking)
+	if (!bWorking)
 	{
-		bWorking = finder.FindNextFile();
-
-		if (finder.IsDots())
-			continue;
-
-		CString strFileName = finder.GetFileName();
-		CString strFilePath = strPath + _T("/") + strFileName;
-
-		// 트리 컨트롤에 아이템 추가
-		HTREEITEM hItem = m_TreeCtrl2.InsertItem(strFileName, hParentItem);
-
-		// 디렉토리인 경우, 재귀적으로 하위 디렉토리를 추가
-		if (finder.IsDirectory())
-		{
-			LoadFTPDirectoryStructure(pFtpConnection, strFilePath, hItem);
-		}
-	}
-}
-
-// 트리 컨트롤에서 선택된 FTP 디렉토리의 내용을 리스트 컨트롤에 표시하는 메서드
-void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
-{
-	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
-
-	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
-	if (hSelectedItem == NULL) {
+		CString strError;
+		strError.Format(_T("Failed to find files at path: %s"), strSearchPath);
+		AfxMessageBox(strError);
 		return;
 	}
 
-	// 선택된 트리 항목의 전체 경로를 가져옵니다.
-	CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
+	// 검색 결과 처리
+	while (bWorking)
+	{
+		// 다음 파일 찾기
+		bWorking = finder.FindNextFile();
 
-	// 리스트 컨트롤 초기화
-	m_ListCtrl2.DeleteAllItems();
+		// "."과 ".."을 무시
+		if (finder.IsDots())
+			continue;
 
-	CFtpFileFind finder(m_pFtpConnection);
-	CString strSearchPath = strSelectedPath + _T("/*.*");
-	AfxMessageBox(strSearchPath);
-	BOOL bWorking = finder.FindFile(strSearchPath);
+		// 파일 이름과 전체 경로 얻기
+		CString strFileName = finder.GetFileName();
+		CString strFilePath = finder.GetFilePath();
+		HTREEITEM hItem = m_TreeCtrl2.InsertItem(strFileName, hParentItem);
+
+		// 디렉토리인 경우 하위 디렉토리 로드
+		if (finder.IsDirectory())
+		{
+			// 디렉토리인 경우 하위 디렉토리를 로드합니다.
+			LoadFTPDirectoryStructure(pFtpConnection, strFilePath, hItem);
+		}
+	}
+
+	// 검색 종료
+	finder.Close();
+}
+
+
+// 내 디렉토리 목록을 가져와서 트리뷰에 뿌려주는 메서드
+void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem)
+{
+	CFileFind finder;
+	CString strWildcard(strPath);
+	strWildcard += _T("\\*.*");
+
+	BOOL bWorking = finder.FindFile(strWildcard);
 	int nIndex = 0;
 	while (bWorking)
 	{
 		bWorking = finder.FindNextFile();
 
+		// '.' 및 '..'을 건너뜁니다.
 		if (finder.IsDots())
 			continue;
 
+		CString strFilePath = finder.GetFilePath();
 		CString strFileName = finder.GetFileName();
-		BOOL bIsDirectory = finder.IsDirectory();
 
-		// 마지막 수정 날짜와 시간
-		CTime lastModified;
-		finder.GetLastWriteTime(lastModified);
-		CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
+		// 트리 컨트롤에 아이템 추가
+		HTREEITEM hItem = m_TreeCtrl.InsertItem(strFileName, hParentItem);
 
-		// 리스트 컨트롤에 정보 추가
-		int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
-		m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
-		m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
-		if (!bIsDirectory)
+		// 디렉토리인 경우, 재귀적으로 하위 디렉토리를 추가합니다.
+		if (finder.IsDirectory())
 		{
-			CString strFileSize;
-			strFileSize.Format(_T("%llu bytes"), finder.GetLength());
-			m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
+			LoadDirectoryStructure(strFilePath, hItem);
 		}
 	}
-	*pResult = 0;
-}
-
-// 트리 아이템으로부터 전체 FTP 경로를 생성하는 메서드
-CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
-{
-	CString strPath;
-	CString strItemText;
-
-	// 아이템이 존재할 때까지 부모 아이템을 따라가며 경로를 구성
-	while (hItem != NULL)
-	{
-		strItemText = m_TreeCtrl2.GetItemText(hItem);
-		strPath = _T("/") + strItemText + strPath;
-		hItem = m_TreeCtrl2.GetParentItem(hItem);
-	}
-
-	// FTP URL과 결합하여 전체 경로 생성
-	CString strFullPath = _T("ftp://") + m_editIP + strPath;
-
-	// 최종적으로 전체 경로 반환
-	return strFullPath;
 }
 

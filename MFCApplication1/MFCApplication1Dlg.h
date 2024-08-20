@@ -43,17 +43,15 @@ public:
 	CTreeCtrl m_TreeCtrl2;
 	CListCtrl m_ListCtrl2;
 	CString GetFullPathFromTreeItem(HTREEITEM hItem);
-	CString GetFullPathFromTreeItem2(HTREEITEM hItem);
+	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
+
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
 	afx_msg void OnBnClickedButtonDisconnect();
 	afx_msg void OnBnClickedButtonConnect();
 	void LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem);
 	afx_msg void OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult);
-	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, CString strPath, HTREEITEM hParentItem);
-	
-	
-	
-	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
+
+
 	
 };
