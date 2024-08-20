@@ -14,6 +14,8 @@
 #define IDC_BUTTON_DISCONNECT           1005
 #define IDC_TREE1                       1007
 #define IDC_LIST1                       1008
+#define IDC_TREE2                       1014
+#define IDC_LIST2                       1015
 
 // Next default values for new objects
 // 

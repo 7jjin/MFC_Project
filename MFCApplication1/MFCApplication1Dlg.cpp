@@ -69,6 +69,8 @@ void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Text(pDX, IDC_EDIT_PW, m_editPW);
 	DDX_Control(pDX, IDC_TREE1, m_TreeCtrl);
 	DDX_Control(pDX, IDC_LIST1, m_ListCtrl);
+	DDX_Control(pDX, IDC_TREE2, m_TreeCtrl2);
+	DDX_Control(pDX, IDC_LIST2, m_ListCtrl2);
 }
 
 BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
@@ -80,6 +82,7 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CONNECT, &CMFCApplication1Dlg::OnBnClickedButtonConnect)
 	ON_BN_CLICKED(IDC_BUTTON_DISCONNECT, &CMFCApplication1Dlg::OnBnClickedButtonDisconnect)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE1, &CMFCApplication1Dlg::OnTvnSelchangedTree1)
+	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE2, &CMFCApplication1Dlg::OnTvnSelchangedTree2)
 END_MESSAGE_MAP()
 
 
@@ -99,6 +102,13 @@ BOOL CMFCApplication1Dlg::OnInitDialog()
 	m_ListCtrl.InsertColumn(1, _T("Type"), LVCFMT_LEFT, rt.Width() * 0.2);
 	m_ListCtrl.InsertColumn(2, _T("Last Modified"), LVCFMT_LEFT, rt.Width() * 0.2);
 	m_ListCtrl.InsertColumn(3, _T("Size"), LVCFMT_RIGHT, rt.Width() * 0.2);
+
+	m_ListCtrl2.GetWindowRect(&rt);
+	m_ListCtrl2.SetExtendedStyle(LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
+	m_ListCtrl2.InsertColumn(0, _T("Name"), LVCFMT_LEFT, rt.Width() * 0.4);
+	m_ListCtrl2.InsertColumn(1, _T("Type"), LVCFMT_LEFT, rt.Width() * 0.2);
+	m_ListCtrl2.InsertColumn(2, _T("Last Modified"), LVCFMT_LEFT, rt.Width() * 0.2);
+	m_ListCtrl2.InsertColumn(3, _T("Size"), LVCFMT_RIGHT, rt.Width() * 0.2);
 
 	// 디렉토리 로드를 시작할 경로를 설정합니다. 예를 들어, C:\부터 시작할 수 있습니다.
 	CString strInitialPath = _T("C:\\");
@@ -190,6 +200,9 @@ void CMFCApplication1Dlg::OnBnClickedButtonConnect()
 
 		m_pFtpConnection = session.GetFtpConnection(m_editIP, m_editID, m_editPW);
 		AfxMessageBox(_T("FTP 연결 성공"));
+
+		// FTP 디렉토리 트리 로드
+		LoadFTPDirectoryStructure(m_pFtpConnection, _T("/"), TVI_ROOT);
 	}
 	catch (CInternetException* pEx)
 	{
@@ -217,7 +230,7 @@ void CMFCApplication1Dlg::OnBnClickedButtonDisconnect()
 	}
 }
 
-// 내 디렉토리 목록 가져오는 메서드
+// 내 디렉토리 목록을 가져와서 트리뷰에 뿌려주는 메서드
 void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem)
 {
 	CFileFind finder;
@@ -249,11 +262,10 @@ void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEIT
 }
 
 
-// Tree Control에 디렉토리 목록 뿌려주기
+// 클릭한 TreeView의 디레토리 목록을 ListView에 보여주는 메서드
 void CMFCApplication1Dlg::OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
-	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
 
 	HTREEITEM hSelectedItem = m_TreeCtrl.GetSelectedItem();
 	if (hSelectedItem == NULL) {
@@ -305,6 +317,7 @@ void CMFCApplication1Dlg::OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult)
 }
 
 
+// 클릭한 노드의 경로를 보여줌.
 CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 {
 	CString strPath;
@@ -329,3 +342,103 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 	// 최종적으로 전체 경로 반환
 	return strPath;
 }
+
+// FTP 디렉토리 목록을 가져오는 메서드
+void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, CString strPath, HTREEITEM hParentItem)
+{
+	CFtpFileFind finder(pFtpConnection);
+	CString strSearchPath = strPath + _T("/*.*");
+
+	BOOL bWorking = finder.FindFile(strSearchPath);
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		if (finder.IsDots())
+			continue;
+
+		CString strFileName = finder.GetFileName();
+		CString strFilePath = strPath + _T("/") + strFileName;
+
+		// 트리 컨트롤에 아이템 추가
+		HTREEITEM hItem = m_TreeCtrl2.InsertItem(strFileName, hParentItem);
+
+		// 디렉토리인 경우, 재귀적으로 하위 디렉토리를 추가
+		if (finder.IsDirectory())
+		{
+			LoadFTPDirectoryStructure(pFtpConnection, strFilePath, hItem);
+		}
+	}
+}
+
+// 트리 컨트롤에서 선택된 FTP 디렉토리의 내용을 리스트 컨트롤에 표시하는 메서드
+void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
+
+	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
+	if (hSelectedItem == NULL) {
+		return;
+	}
+
+	// 선택된 트리 항목의 전체 경로를 가져옵니다.
+	CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
+
+	// 리스트 컨트롤 초기화
+	m_ListCtrl2.DeleteAllItems();
+
+	CFtpFileFind finder(m_pFtpConnection);
+	CString strSearchPath = strSelectedPath + _T("/*.*");
+	AfxMessageBox(strSearchPath);
+	BOOL bWorking = finder.FindFile(strSearchPath);
+	int nIndex = 0;
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		if (finder.IsDots())
+			continue;
+
+		CString strFileName = finder.GetFileName();
+		BOOL bIsDirectory = finder.IsDirectory();
+
+		// 마지막 수정 날짜와 시간
+		CTime lastModified;
+		finder.GetLastWriteTime(lastModified);
+		CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
+
+		// 리스트 컨트롤에 정보 추가
+		int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
+		m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
+		m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
+		if (!bIsDirectory)
+		{
+			CString strFileSize;
+			strFileSize.Format(_T("%llu bytes"), finder.GetLength());
+			m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
+		}
+	}
+	*pResult = 0;
+}
+
+// 트리 아이템으로부터 전체 FTP 경로를 생성하는 메서드
+CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
+{
+	CString strPath;
+	CString strItemText;
+
+	// 아이템이 존재할 때까지 부모 아이템을 따라가며 경로를 구성
+	while (hItem != NULL)
+	{
+		strItemText = m_TreeCtrl2.GetItemText(hItem);
+		strPath = _T("/") + strItemText + strPath;
+		hItem = m_TreeCtrl2.GetParentItem(hItem);
+	}
+
+	// FTP URL과 결합하여 전체 경로 생성
+	CString strFullPath = _T("ftp://") + m_editIP + strPath;
+
+	// 최종적으로 전체 경로 반환
+	return strFullPath;
+}
+
