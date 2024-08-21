@@ -14,6 +14,7 @@
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
+#include <stack>
 
 
 // 응용 프로그램 정보에 사용되는 CAboutDlg 대화 상자입니다.
@@ -319,54 +320,60 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 }
 
 
-void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem)
+// FTP 서버의 디렉토리 목록을 Tree Control로 보여주기
+void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strStartPath, HTREEITEM hParentItem)
 {
-	CFtpFileFind finder(pFtpConnection);
-	CString strSearchPath = strPath;
+	// 스택을 사용해 디렉토리 경로를 관리
+	std::stack<std::pair<CString, HTREEITEM>> directories;
+	directories.push(std::make_pair(strStartPath, hParentItem));
 
-	// 경로가 '/'로 끝나지 않으면 추가
-	if (strSearchPath.Right(1) != _T("/"))
-		strSearchPath += _T("/");
-
-	// 와일드카드 추가
-	strSearchPath += _T("*");
-
-	// 파일 및 디렉토리 검색 시작
-	BOOL bWorking = finder.FindFile(strSearchPath);
-	if (!bWorking)
+	while (!directories.empty())
 	{
-		CString strError;
-		strError.Format(_T("Failed to find files at path: %s"), strSearchPath);
-		AfxMessageBox(strError);
-		return;
-	}
+		// 스택에서 디렉토리 경로와 Tree Control 아이템을 꺼냄
+		std::pair<CString, HTREEITEM> current = directories.top();
+		directories.pop();
 
-	// 검색 결과 처리
-	while (bWorking)
-	{
-		// 다음 파일 찾기
-		bWorking = finder.FindNextFile();
+		CString currentPath = current.first;
+		HTREEITEM parentItem = current.second;
 
-		// "."과 ".."을 무시
-		if (finder.IsDots())
-			continue;
+		CFtpFileFind finder(pFtpConnection);
+		CString strSearchPath = currentPath;
 
-		// 파일 이름과 전체 경로 얻기
-		CString strFileName = finder.GetFileName();
-		CString strFilePath = finder.GetFilePath();
-		HTREEITEM hItem = m_TreeCtrl2.InsertItem(strFileName, hParentItem);
+		// 경로가 '/'로 끝나지 않으면 추가
+		if (strSearchPath.Right(1) != _T("/"))
+			strSearchPath += _T("/");
 
-		// 디렉토리인 경우 하위 디렉토리 로드
-		if (finder.IsDirectory())
+		// 와일드카드 추가
+		strSearchPath += _T("*");
+
+		BOOL bWorking = finder.FindFile(strSearchPath);
+		while (bWorking)
 		{
-			// 디렉토리인 경우 하위 디렉토리를 로드합니다.
-			LoadFTPDirectoryStructure(pFtpConnection, strFilePath, hItem);
-		}
-	}
+			bWorking = finder.FindNextFile();
 
-	// 검색 종료
-	finder.Close();
+			// "."과 ".."을 무시
+			if (finder.IsDots())
+				continue;
+
+			// 파일 이름과 전체 경로 얻기
+			CString strFileName = finder.GetFileName();
+			CString strFilePath = finder.GetFilePath();
+
+			// 트리 컨트롤에 아이템 추가
+			HTREEITEM hItem = m_TreeCtrl2.InsertItem(strFileName, parentItem);
+
+			// 디렉토리인 경우 스택에 추가
+			if (finder.IsDirectory())
+			{
+				directories.push(std::make_pair(strFilePath, hItem));
+			}
+		}
+
+		// 검색 종료
+		finder.Close();
+	}
 }
+
 
 
 // 내 디렉토리 목록을 가져와서 트리뷰에 뿌려주는 메서드
