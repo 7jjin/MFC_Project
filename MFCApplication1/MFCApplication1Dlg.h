@@ -43,7 +43,12 @@ public:
 	CTreeCtrl m_TreeCtrl2;
 	CListCtrl m_ListCtrl2;
 	CString GetFullPathFromTreeItem(HTREEITEM hItem);
+
 	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
+
+	
+
+	
 
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
@@ -54,4 +59,7 @@ public:
 
 
 	
+	afx_msg
+		CString GetFullPathFromTreeItem2(HTREEITEM hItem);
+	void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
 };

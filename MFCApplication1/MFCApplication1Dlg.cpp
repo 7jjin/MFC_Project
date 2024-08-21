@@ -87,7 +87,7 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_CONNECT, &CMFCApplication1Dlg::OnBnClickedButtonConnect)
 	ON_BN_CLICKED(IDC_BUTTON_DISCONNECT, &CMFCApplication1Dlg::OnBnClickedButtonDisconnect)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE1, &CMFCApplication1Dlg::OnTvnSelchangedTree1)
-
+	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE2, &CMFCApplication1Dlg::OnTvnSelchangedTree2)
 END_MESSAGE_MAP()
 
 
@@ -97,8 +97,6 @@ BOOL CMFCApplication1Dlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
 
-
-	
 	// List Control 초기화
 	CRect rt;
 	m_ListCtrl.GetWindowRect(&rt);
@@ -237,6 +235,40 @@ void CMFCApplication1Dlg::OnBnClickedButtonDisconnect()
 
 
 
+////////////////////////////////////////////////// Local Tree/List Contorl 관련 메소드 ///////////////////////////////////////////////////////////////
+
+// 내 디렉토리 목록을 가져와서 트리뷰에 뿌려주는 메서드
+void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem)
+{
+	CFileFind finder;
+	CString strWildcard(strPath);
+	strWildcard += _T("\\*.*");
+
+	BOOL bWorking = finder.FindFile(strWildcard);
+	int nIndex = 0;
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		// '.' 및 '..'을 건너뜁니다.
+		if (finder.IsDots())
+			continue;
+
+		CString strFilePath = finder.GetFilePath();
+		CString strFileName = finder.GetFileName();
+
+		// 트리 컨트롤에 아이템 추가
+		HTREEITEM hItem = m_TreeCtrl.InsertItem(strFileName, hParentItem);
+
+		// 디렉토리인 경우, 재귀적으로 하위 디렉토리를 추가합니다.
+		if (finder.IsDirectory())
+		{
+			LoadDirectoryStructure(strFilePath, hItem);
+		}
+	}
+}
+
+
 
 // 클릭한 TreeView의 디레토리 목록을 ListView에 보여주는 메서드
 void CMFCApplication1Dlg::OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult)
@@ -320,6 +352,10 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 }
 
 
+
+////////////////////////////////////////////////// server Tree/List Contorl 관련 메소드 ///////////////////////////////////////////////////////////////
+
+
 // FTP 서버의 디렉토리 목록을 Tree Control로 보여주기
 void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strStartPath, HTREEITEM hParentItem)
 {
@@ -368,42 +404,87 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 				directories.push(std::make_pair(strFilePath, hItem));
 			}
 		}
-
 		// 검색 종료
 		finder.Close();
 	}
 }
 
 
-
-// 내 디렉토리 목록을 가져와서 트리뷰에 뿌려주는 메서드
-void CMFCApplication1Dlg::LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem)
+/// <summary>
+///  클릭한 노드의 하위 디렉토리를 List Control에 뿌려주기
+/// </summary>
+/// <param name="pNMHDR"></param>
+/// <param name="pResult"></param>
+void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
 {
-	CFileFind finder;
-	CString strWildcard(strPath);
-	strWildcard += _T("\\*.*");
+	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
 
-	BOOL bWorking = finder.FindFile(strWildcard);
+	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
+	if (hSelectedItem == NULL) {
+		return;
+	}
+
+	// 선택된 항목 경로
+	CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
+
+	// List Control 초기화
+	m_ListCtrl2.DeleteAllItems();
+
+	CFtpFileFind finder(m_pFtpConnection);
+	CString strSearchPath = strSelectedPath;
+
+	// 경로가 '/'로 끝나지 않으면 추가
+	if (strSearchPath.Right(1) != _T("/"))
+		strSearchPath += _T("/");
+
+	// 와일드카드 추가
+	strSearchPath += _T("*");
+
+	BOOL bWorking = finder.FindFile(strSearchPath);
 	int nIndex = 0;
-	while (bWorking)
-	{
+	while (bWorking) {
 		bWorking = finder.FindNextFile();
 
-		// '.' 및 '..'을 건너뜁니다.
 		if (finder.IsDots())
 			continue;
 
-		CString strFilePath = finder.GetFilePath();
 		CString strFileName = finder.GetFileName();
+		BOOL bIsDirectory = finder.IsDirectory();
+		ULONGLONG fileSize = finder.GetLength();
+		CTime lastModified;
+		finder.GetLastWriteTime(lastModified);
+		CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
 
-		// 트리 컨트롤에 아이템 추가
-		HTREEITEM hItem = m_TreeCtrl.InsertItem(strFileName, hParentItem);
-
-		// 디렉토리인 경우, 재귀적으로 하위 디렉토리를 추가합니다.
-		if (finder.IsDirectory())
+		int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
+		m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
+		m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
+		if (!bIsDirectory)
 		{
-			LoadDirectoryStructure(strFilePath, hItem);
+			CString strFileSize;
+			strFileSize.Format(_T("%llu bytes"), fileSize);
+			m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
 		}
 	}
+
+	finder.Close();
+	*pResult = 0;
 }
+CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
+{
+	CString strPath;
+	CString strItemText;
+
+	// 아이템이 존재할 때까지 부모 아이템을 따라가며 경로를 구성
+	while (hItem != NULL)
+	{
+		strItemText = m_TreeCtrl2.GetItemText(hItem);
+		strPath = _T("/") + strItemText + strPath;
+		hItem = m_TreeCtrl2.GetParentItem(hItem);
+	}
+
+	// 최종적으로 전체 경로 반환
+	return strPath;
+}
+
+
 
