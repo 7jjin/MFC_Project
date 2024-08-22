@@ -539,10 +539,13 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
 
 
 
-
-
 ////////////////////////////////////////////////// Drag 관련 메소드 ///////////////////////////////////////////////////////////////////////////
 
+/// <summary>
+/// Local List Control Drag 설정
+/// </summary>
+/// <param name="pNMHDR"></param>
+/// <param name="pResult"></param>
 void CMFCApplication1Dlg::OnLvnBegindragList1(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMLISTVIEW pNMLV = reinterpret_cast<LPNMLISTVIEW>(pNMHDR);
@@ -558,6 +561,11 @@ void CMFCApplication1Dlg::OnLvnBegindragList1(NMHDR* pNMHDR, LRESULT* pResult)
 	*pResult = 0;
 }
 
+/// <summary>
+/// Remote List Control Drag 설정
+/// </summary>
+/// <param name="pNMHDR"></param>
+/// <param name="pResult"></param>
 void CMFCApplication1Dlg::OnLvnBegindragList2(NMHDR* pNMHDR, LRESULT* pResult)
 {
 	LPNMLISTVIEW pNMLV = reinterpret_cast<LPNMLISTVIEW>(pNMHDR);
@@ -573,6 +581,11 @@ void CMFCApplication1Dlg::OnLvnBegindragList2(NMHDR* pNMHDR, LRESULT* pResult)
 	*pResult = 0;
 }
 
+/// <summary>
+/// Drag 하는 도중 메서드
+/// </summary>
+/// <param name="nFlags"></param>
+/// <param name="point"></param>
 void CMFCApplication1Dlg::OnMouseMove(UINT nFlags, CPoint point)
 {
 	if (m_bDragging)
@@ -599,6 +612,11 @@ void CMFCApplication1Dlg::OnMouseMove(UINT nFlags, CPoint point)
 	CDialogEx::OnMouseMove(nFlags, point);
 }
 
+/// <summary>
+/// Drop 했을 때 처리 메서드
+/// </summary>
+/// <param name="nFlags"></param>
+/// <param name="point"></param>
 void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 {
 	if (m_bDragging)
@@ -628,6 +646,10 @@ void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 	CDialogEx::OnLButtonUp(nFlags, point);
 }
 
+/// <summary>
+/// 파일 업로드 메서드
+/// </summary>
+/// <param name="nIndex"></param>
 void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 {
 	// 인터넷 세션 객체 생성
@@ -658,6 +680,10 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 	}
 }
 
+/// <summary>
+/// 파일 다운로드 메서드
+/// </summary>
+/// <param name="nIndex"></param>
 void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 {
 	// 인터넷 세션 객체 생성
@@ -683,6 +709,10 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 	}
 }
 
+/// <summary>
+/// 선택되 FTP 아이템 경로 메서드
+/// </summary>
+/// <returns></returns>
 CString CMFCApplication1Dlg::GetSelectedFtpPath()
 {
 	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
