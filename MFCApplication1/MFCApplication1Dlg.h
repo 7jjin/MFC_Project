@@ -37,7 +37,12 @@ public:
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);	// DDX/DDV 지원입니다.
-
+	// Drag & Drop 관련 멤버 변수
+	BOOL m_bDragging;
+	CImageList* m_pDragImage;
+	int m_nDragIndex;
+	CWnd* m_pDropWnd;
+	CPoint m_ptDropPoint;
 
 // 구현입니다.
 protected:
@@ -60,7 +65,8 @@ public:
 	CListCtrl m_ListCtrl;
 	CTreeCtrl m_TreeCtrl2;
 	CListCtrl m_ListCtrl2;
-
+	CEdit m_localPath;
+	CEdit m_remotePath;
 	
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
@@ -72,6 +78,14 @@ public:
 	afx_msg
 		CString AddRemoteFile(const CString strCurrentRemoteDir, const WIN32_FIND_DATAA& find_data, FILE_LIST& file_list);
 	CString GetFullPathFromTreeItem2(HTREEITEM hItem);
+	void OnLvnBegindragList1(NMHDR* pNMHDR, LRESULT* pResult);
+	void OnLvnBegindragList2(NMHDR* pNMHDR, LRESULT* pResult);
+	void OnMouseMove(UINT nFlags, CPoint point);
+	void OnLButtonUp(UINT nFlags, CPoint point);
+	void UploadFileToFtp(int nIndex);
+	void DownloadFileFromFtp(int nIndex);
+	CString GetSelectedFtpPath();
 	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);
+	
 };

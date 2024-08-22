@@ -31,6 +31,12 @@ public:
 
 	protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
+	// Drag & Drop 관련 멤버 변수
+	BOOL m_bDragging;
+	CImageList* m_pDragImage;
+	int m_nDragIndex;
+	CWnd* m_pDropWnd;
+	CPoint m_ptDropPoint;
 
 // 구현입니다.
 protected:
@@ -76,6 +82,8 @@ void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_LIST1, m_ListCtrl);
 	DDX_Control(pDX, IDC_TREE2, m_TreeCtrl2);
 	DDX_Control(pDX, IDC_LIST2, m_ListCtrl2);
+	DDX_Control(pDX, IDC_EDIT_LOCAL_PATH, m_localPath);
+	DDX_Control(pDX, IDC_EDIT_REMOTE_PATH, m_remotePath);
 }
 
 BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
@@ -88,6 +96,10 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BUTTON_DISCONNECT, &CMFCApplication1Dlg::OnBnClickedButtonDisconnect)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE1, &CMFCApplication1Dlg::OnTvnSelchangedTree1)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE2, &CMFCApplication1Dlg::OnTvnSelchangedTree2)
+	ON_NOTIFY(LVN_BEGINDRAG, IDC_LIST1, &CMFCApplication1Dlg::OnLvnBegindragList1)
+	ON_WM_MOUSEMOVE()
+	ON_WM_LBUTTONUP()
+	ON_NOTIFY(LVN_BEGINDRAG, IDC_LIST2, &CMFCApplication1Dlg::OnLvnBegindragList2)
 END_MESSAGE_MAP()
 
 
@@ -347,6 +359,8 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 	// 루트 경로를 추가 (C 드라이브 가정)
 	strPath = _T("C:\\") + strPath;
 
+	m_localPath.SetWindowTextW(strPath);
+
 	// 최종적으로 전체 경로 반환
 	return strPath;
 }
@@ -517,9 +531,158 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
 		hItem = m_TreeCtrl2.GetParentItem(hItem);
 	}
 
+	m_remotePath.SetWindowTextW(strPath);
+
 	// 최종적으로 전체 경로 반환
 	return strPath;
 }
 
 
+
+
+
+////////////////////////////////////////////////// Drag 관련 메소드 ///////////////////////////////////////////////////////////////////////////
+
+void CMFCApplication1Dlg::OnLvnBegindragList1(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMLISTVIEW pNMLV = reinterpret_cast<LPNMLISTVIEW>(pNMHDR);
+
+	// 드래그 시작
+	m_bDragging = TRUE;
+	m_nDragIndex = pNMLV->iItem;
+	m_pDragImage = m_ListCtrl.CreateDragImage(m_nDragIndex, &m_ptDropPoint);
+	m_pDragImage->BeginDrag(0, CPoint(0, 0));
+	m_pDragImage->DragEnter(GetDesktopWindow(), pNMLV->ptAction);
+
+	SetCapture();
+	*pResult = 0;
+}
+
+void CMFCApplication1Dlg::OnLvnBegindragList2(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMLISTVIEW pNMLV = reinterpret_cast<LPNMLISTVIEW>(pNMHDR);
+
+	// 드래그 시작
+	m_bDragging = TRUE;
+	m_nDragIndex = pNMLV->iItem;
+	m_pDragImage = m_ListCtrl2.CreateDragImage(m_nDragIndex, &m_ptDropPoint);
+	m_pDragImage->BeginDrag(0, CPoint(0, 0));
+	m_pDragImage->DragEnter(GetDesktopWindow(), pNMLV->ptAction);
+
+	SetCapture();
+	*pResult = 0;
+}
+
+void CMFCApplication1Dlg::OnMouseMove(UINT nFlags, CPoint point)
+{
+	if (m_bDragging)
+	{
+		CPoint pt(point);
+		ClientToScreen(&pt);
+		m_pDragImage->DragMove(pt);
+		m_pDragImage->DragShowNolock(FALSE);
+
+		// 드롭할 윈도우 탐색
+		CWnd* pDropWnd = WindowFromPoint(pt);
+		if (pDropWnd != m_pDropWnd)
+		{
+			if (m_pDropWnd != nullptr)
+			{
+				m_pDragImage->DragLeave(m_pDropWnd);
+			}
+			m_pDropWnd = pDropWnd;
+			m_pDragImage->DragEnter(m_pDropWnd, pt);
+		}
+		m_pDragImage->DragShowNolock(TRUE);
+	}
+
+	CDialogEx::OnMouseMove(nFlags, point);
+}
+
+void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
+{
+	if (m_bDragging)
+	{
+		m_bDragging = FALSE;
+		::ReleaseCapture();
+		m_pDragImage->EndDrag();
+		delete m_pDragImage;
+		m_pDragImage = nullptr;
+
+		// 드롭할 윈도우 탐색
+		ClientToScreen(&point);
+		CWnd* pDropWnd = WindowFromPoint(point);
+
+		if (pDropWnd == &m_ListCtrl2)
+		{
+			// List1에서 List2로 드래그 -> 파일 업로드
+			UploadFileToFtp(m_nDragIndex);
+		}
+		else if (pDropWnd == &m_ListCtrl)
+		{
+			// List2에서 List1로 드래그 -> 파일 다운로드
+			DownloadFileFromFtp(m_nDragIndex);
+		}
+	}
+
+	CDialogEx::OnLButtonUp(nFlags, point);
+}
+
+void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	HTREEITEM hSelectedItem = m_TreeCtrl.GetSelectedItem();
+	if (hSelectedItem == NULL) {
+		return;
+	}
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CString strLocalFilePath = GetFullPathFromTreeItem(hSelectedItem) + _T("\\") +  m_ListCtrl.GetItemText(nIndex, 0);
+	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl.GetItemText(nIndex, 0);
+	AfxMessageBox(strLocalFilePath);
+	AfxMessageBox( strRemoteFilePath);
+
+
+	if (ftpConnection->PutFile(strLocalFilePath, strRemoteFilePath))
+	{
+		AfxMessageBox(_T("파일 업로드 성공!"));
+	}
+	else
+	{
+		AfxMessageBox(_T("파일 업로드 실패!"));
+	}
+}
+
+void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl2.GetItemText(nIndex, 0);
+	CString strLocalFilePath = _T("C:\\LocalDirectory\\") + m_ListCtrl2.GetItemText(nIndex, 0);
+
+	if (ftpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
+	{
+		AfxMessageBox(_T("파일 다운로드 성공!"));
+	}
+	else
+	{
+		AfxMessageBox(_T("파일 다운로드 실패!"));
+	}
+}
+
+CString CMFCApplication1Dlg::GetSelectedFtpPath()
+{
+	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
+	return GetFullPathFromTreeItem2(hSelectedItem);
+}
 
