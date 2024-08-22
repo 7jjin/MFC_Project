@@ -382,6 +382,9 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 		// 와일드카드 추가
 		strSearchPath += _T("*");
 
+
+
+		/// 이 부분에서 자꾸 오류가 남..
 		BOOL bWorking = finder.FindFile(strSearchPath);
 		while (bWorking)
 		{
@@ -417,57 +420,96 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 /// <param name="pResult"></param>
 void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
 {
-	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
+    LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
 
-	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
-	if (hSelectedItem == NULL) {
-		return;
-	}
+    HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
+    if (hSelectedItem == NULL) {
+        return;
+    }
 
-	// 선택된 항목 경로
-	CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
+    // 선택된 항목 경로
+    CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
 
-	// List Control 초기화
-	m_ListCtrl2.DeleteAllItems();
+    // List Control 초기화
+    m_ListCtrl2.DeleteAllItems();
 
-	CFtpFileFind finder(m_pFtpConnection);
-	CString strSearchPath = strSelectedPath;
+    // 스택을 사용하여 디렉토리 탐색
+    std::stack<CString> directories;
+    directories.push(strSelectedPath);
 
-	// 경로가 '/'로 끝나지 않으면 추가
-	if (strSearchPath.Right(1) != _T("/"))
-		strSearchPath += _T("/");
+    int nIndex = 0;
 
-	// 와일드카드 추가
-	strSearchPath += _T("*");
+    while (!directories.empty()) 
+    {
+        CString currentPath = directories.top();
+        directories.pop();
 
-	BOOL bWorking = finder.FindFile(strSearchPath);
-	int nIndex = 0;
-	while (bWorking) {
-		bWorking = finder.FindNextFile();
+		// 인터넷 세션 객체 생성
+		CInternetSession internetSession;
 
-		if (finder.IsDots())
-			continue;
+		// FTP 서버에 연결
+		CFtpConnection* ftpConnection = nullptr;
+		
+		ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
 
-		CString strFileName = finder.GetFileName();
-		BOOL bIsDirectory = finder.IsDirectory();
-		ULONGLONG fileSize = finder.GetLength();
-		CTime lastModified;
-		finder.GetLastWriteTime(lastModified);
-		CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
+		// 파일 찾기 객체 생성
+		CFtpFileFind fileFind(ftpConnection);
 
-		int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
-		m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
-		m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
-		if (!bIsDirectory)
-		{
-			CString strFileSize;
-			strFileSize.Format(_T("%llu bytes"), fileSize);
-			m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
-		}
-	}
+        //CFtpFileFind finder(m_pFtpConnection);
+        CString strSearchPath = currentPath;
 
-	finder.Close();
-	*pResult = 0;
+        // 경로가 '/'로 끝나지 않으면 추가
+        //if (strSearchPath.Right(1) != _T("/"))
+        //    strSearchPath += _T("/");
+
+        //// 와일드카드 추가
+        //strSearchPath += _T("*");
+
+
+
+        BOOL bWorking = fileFind.FindFile(strSearchPath + _T("\\*.*"));
+
+        while (bWorking) 
+        {
+            bWorking = fileFind.FindNextFile();
+
+            if (fileFind.IsDots())
+                continue;
+
+            CString strFileName = fileFind.GetFileName();
+            BOOL bIsDirectory = fileFind.IsDirectory();
+            ULONGLONG fileSize = fileFind.GetLength();
+            CTime lastModified;
+			fileFind.GetLastWriteTime(lastModified);
+            CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
+
+            // 리스트 컨트롤에 파일 또는 디렉토리 정보 추가
+            int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
+            m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
+            m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
+
+            if (!bIsDirectory)
+            {
+                CString strFileSize;
+                strFileSize.Format(_T("%llu bytes"), fileSize);
+                m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
+            }
+
+            // 디렉토리인 경우 스택에 추가
+            if (bIsDirectory)
+            {
+                CString strSubDir = currentPath;
+                if (strSubDir.Right(1) != _T("/"))
+                    strSubDir += _T("/");
+
+                strSubDir += strFileName;
+                directories.push(strSubDir);
+            }
+        }
+		fileFind.Close();
+    }
+
+    *pResult = 0;
 }
 CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
 {

@@ -4,6 +4,24 @@
 
 #pragma once
 #include <afxinet.h>
+#include <map>
+#include <string>
+#include <afxdialogex.h>
+#include <wininet.h>
+#include <iostream>
+
+// FileInfo 구조체 정의
+struct FileInfo
+{
+	BOOL isDir;                  // 디렉토리 여부
+	__int64 nFileSize;           // 파일 크기
+	SYSTEMTIME stCreattionTime;  // 생성일
+	SYSTEMTIME stLastAccessTime; // 최종 접근일
+	SYSTEMTIME stLastWriteTime;  // 최종 수정일
+	TCHAR szFilePath[MAX_PATH];  // 파일 경로
+};
+
+typedef std::map<CString, FileInfo> FILE_LIST;
 
 // CMFCApplication1Dlg 대화 상자
 class CMFCApplication1Dlg : public CDialogEx
@@ -42,24 +60,18 @@ public:
 	CListCtrl m_ListCtrl;
 	CTreeCtrl m_TreeCtrl2;
 	CListCtrl m_ListCtrl2;
-	CString GetFullPathFromTreeItem(HTREEITEM hItem);
-
-	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
 
 	
-
-	
-
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
 	afx_msg void OnBnClickedButtonDisconnect();
 	afx_msg void OnBnClickedButtonConnect();
 	void LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem);
+	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
 	afx_msg void OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult);
-
-
-	
 	afx_msg
-		CString GetFullPathFromTreeItem2(HTREEITEM hItem);
-	void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
+		CString AddRemoteFile(const CString strCurrentRemoteDir, const WIN32_FIND_DATAA& find_data, FILE_LIST& file_list);
+	CString GetFullPathFromTreeItem2(HTREEITEM hItem);
+	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);
 };
