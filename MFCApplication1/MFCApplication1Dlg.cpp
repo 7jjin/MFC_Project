@@ -372,19 +372,14 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 		CString currentPath = current.first;
 		HTREEITEM parentItem = current.second;
 
+		// 디렉토리 경로에 슬래시 추가
+		if (currentPath.Right(1) != _T("/"))
+			currentPath += _T("/");
+
+		// 파일 찾기 객체 생성
 		CFtpFileFind finder(pFtpConnection);
-		CString strSearchPath = currentPath;
+		CString strSearchPath = currentPath + _T("*");
 
-		// 경로가 '/'로 끝나지 않으면 추가
-		if (strSearchPath.Right(1) != _T("/"))
-			strSearchPath += _T("/");
-
-		// 와일드카드 추가
-		strSearchPath += _T("*");
-
-
-
-		/// 이 부분에서 자꾸 오류가 남..
 		BOOL bWorking = finder.FindFile(strSearchPath);
 		while (bWorking)
 		{
@@ -396,7 +391,7 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 
 			// 파일 이름과 전체 경로 얻기
 			CString strFileName = finder.GetFileName();
-			CString strFilePath = finder.GetFilePath();
+			CString strFilePath = currentPath + strFileName;
 
 			// 트리 컨트롤에 아이템 추가
 			HTREEITEM hItem = m_TreeCtrl2.InsertItem(strFileName, parentItem);
@@ -411,6 +406,7 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 		finder.Close();
 	}
 }
+
 
 
 /// <summary>
@@ -455,17 +451,8 @@ void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
 		// 파일 찾기 객체 생성
 		CFtpFileFind fileFind(ftpConnection);
 
-        //CFtpFileFind finder(m_pFtpConnection);
+
         CString strSearchPath = currentPath;
-
-        // 경로가 '/'로 끝나지 않으면 추가
-        //if (strSearchPath.Right(1) != _T("/"))
-        //    strSearchPath += _T("/");
-
-        //// 와일드카드 추가
-        //strSearchPath += _T("*");
-
-
 
         BOOL bWorking = fileFind.FindFile(strSearchPath + _T("\\*.*"));
 
@@ -511,6 +498,12 @@ void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
 
     *pResult = 0;
 }
+
+/// <summary>
+/// FTP 서버 디렉토리 경로 찾기
+/// </summary>
+/// <param name="hItem"></param>
+/// <returns></returns>
 CString CMFCApplication1Dlg::GetFullPathFromTreeItem2(HTREEITEM hItem)
 {
 	CString strPath;
