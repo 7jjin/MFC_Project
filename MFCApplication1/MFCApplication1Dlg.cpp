@@ -666,9 +666,12 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 	// FTP 서버에 연결
 	CFtpConnection* ftpConnection = nullptr;
 
+	CString strLocalPath;
+	m_localPath.GetWindowText(strLocalPath);
+
 	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
 	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl2.GetItemText(nIndex, 0);
-	CString strLocalFilePath = _T("C:\\LocalDirectory\\") + m_ListCtrl2.GetItemText(nIndex, 0);
+	CString strLocalFilePath = strLocalPath  + _T("\\") + m_ListCtrl2.GetItemText(nIndex, 0);
 
 	if (ftpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
 	{
