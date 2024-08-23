@@ -83,8 +83,15 @@ public:
 	void OnMouseMove(UINT nFlags, CPoint point);
 	void OnLButtonUp(UINT nFlags, CPoint point);
 	void UploadFileToFtp(int nIndex);
+	void OnLButtonDown(UINT nFlags, CPoint point);
+	void UploadFileToFtp(CString localFilePath, CString remoteFilePath);
+
+	void DownloadFileFromFtp(CString remoteFilePath, CString localFilePath);
+
 	void DownloadFileFromFtp(int nIndex);
 	CString GetSelectedFtpPath();
+	void UploadFolderToFTP(CString localFolderPath, CString remoteFolderPath);
+	void DownloadFolderFromFTP(CString remoteFolderPath, CString localFolderPath);
 	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);
 	

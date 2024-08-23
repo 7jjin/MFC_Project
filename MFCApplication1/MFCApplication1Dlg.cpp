@@ -1,4 +1,4 @@
-﻿
+﻿﻿
 // MFCApplication1Dlg.cpp: 구현 파일
 //
 
@@ -24,12 +24,12 @@ class CAboutDlg : public CDialogEx
 public:
 	CAboutDlg();
 
-// 대화 상자 데이터입니다.
+	// 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
 #endif
 
-	protected:
+protected:
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
 	// Drag & Drop 관련 멤버 변수
 	BOOL m_bDragging;
@@ -38,7 +38,7 @@ public:
 	CWnd* m_pDropWnd;
 	CPoint m_ptDropPoint;
 
-// 구현입니다.
+	// 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
 private:
@@ -113,7 +113,7 @@ BOOL CMFCApplication1Dlg::OnInitDialog()
 	CRect rt;
 	m_ListCtrl.GetWindowRect(&rt);
 	m_ListCtrl.SetExtendedStyle(LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
-	m_ListCtrl.InsertColumn(0, _T("Name"), LVCFMT_LEFT, rt.Width()*0.4);
+	m_ListCtrl.InsertColumn(0, _T("Name"), LVCFMT_LEFT, rt.Width() * 0.4);
 	m_ListCtrl.InsertColumn(1, _T("Type"), LVCFMT_LEFT, rt.Width() * 0.2);
 	m_ListCtrl.InsertColumn(2, _T("Last Modified"), LVCFMT_LEFT, rt.Width() * 0.2);
 	m_ListCtrl.InsertColumn(3, _T("Size"), LVCFMT_RIGHT, rt.Width() * 0.2);
@@ -430,87 +430,87 @@ void CMFCApplication1Dlg::LoadFTPDirectoryStructure(CFtpConnection* pFtpConnecti
 /// <param name="pResult"></param>
 void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
 {
-    LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
+	LPNMTREEVIEW pNMTreeView = reinterpret_cast<LPNMTREEVIEW>(pNMHDR);
 
-    HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
-    if (hSelectedItem == NULL) {
-        return;
-    }
+	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
+	if (hSelectedItem == NULL) {
+		return;
+	}
 
-    // 선택된 항목 경로
-    CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
+	// 선택된 항목 경로
+	CString strSelectedPath = GetFullPathFromTreeItem2(hSelectedItem);
 
-    // List Control 초기화
-    m_ListCtrl2.DeleteAllItems();
+	// List Control 초기화
+	m_ListCtrl2.DeleteAllItems();
 
-    // 스택을 사용하여 디렉토리 탐색
-    std::stack<CString> directories;
-    directories.push(strSelectedPath);
+	// 스택을 사용하여 디렉토리 탐색
+	std::stack<CString> directories;
+	directories.push(strSelectedPath);
 
-    int nIndex = 0;
+	int nIndex = 0;
 
-    while (!directories.empty()) 
-    {
-        CString currentPath = directories.top();
-        directories.pop();
+	while (!directories.empty())
+	{
+		CString currentPath = directories.top();
+		directories.pop();
 
 		// 인터넷 세션 객체 생성
 		CInternetSession internetSession;
 
 		// FTP 서버에 연결
 		CFtpConnection* ftpConnection = nullptr;
-		
+
 		ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
 
 		// 파일 찾기 객체 생성
 		CFtpFileFind fileFind(ftpConnection);
 
 
-        CString strSearchPath = currentPath;
+		CString strSearchPath = currentPath;
 
-        BOOL bWorking = fileFind.FindFile(strSearchPath + _T("\\*.*"));
+		BOOL bWorking = fileFind.FindFile(strSearchPath + _T("\\*.*"));
 
-        while (bWorking) 
-        {
-            bWorking = fileFind.FindNextFile();
+		while (bWorking)
+		{
+			bWorking = fileFind.FindNextFile();
 
-            if (fileFind.IsDots())
-                continue;
+			if (fileFind.IsDots())
+				continue;
 
-            CString strFileName = fileFind.GetFileName();
-            BOOL bIsDirectory = fileFind.IsDirectory();
-            ULONGLONG fileSize = fileFind.GetLength();
-            CTime lastModified;
+			CString strFileName = fileFind.GetFileName();
+			BOOL bIsDirectory = fileFind.IsDirectory();
+			ULONGLONG fileSize = fileFind.GetLength();
+			CTime lastModified;
 			fileFind.GetLastWriteTime(lastModified);
-            CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
+			CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
 
-            // 리스트 컨트롤에 파일 또는 디렉토리 정보 추가
-            int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
-            m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
-            m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
+			// 리스트 컨트롤에 파일 또는 디렉토리 정보 추가
+			int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
+			m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
+			m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
 
-            if (!bIsDirectory)
-            {
-                CString strFileSize;
-                strFileSize.Format(_T("%llu bytes"), fileSize);
-                m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
-            }
+			if (!bIsDirectory)
+			{
+				CString strFileSize;
+				strFileSize.Format(_T("%llu bytes"), fileSize);
+				m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
+			}
 
-            // 디렉토리인 경우 스택에 추가
-            if (bIsDirectory)
-            {
-                CString strSubDir = currentPath;
-                if (strSubDir.Right(1) != _T("/"))
-                    strSubDir += _T("/");
+			// 디렉토리인 경우 스택에 추가
+			if (bIsDirectory)
+			{
+				CString strSubDir = currentPath;
+				if (strSubDir.Right(1) != _T("/"))
+					strSubDir += _T("/");
 
-                strSubDir += strFileName;
-                directories.push(strSubDir);
-            }
-        }
+				strSubDir += strFileName;
+				directories.push(strSubDir);
+			}
+		}
 		fileFind.Close();
-    }
+	}
 
-    *pResult = 0;
+	*pResult = 0;
 }
 
 /// <summary>
@@ -664,10 +664,10 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 	}
 
 	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
-	CString strLocalFilePath = GetFullPathFromTreeItem(hSelectedItem) + _T("\\") +  m_ListCtrl.GetItemText(nIndex, 0);
+	CString strLocalFilePath = GetFullPathFromTreeItem(hSelectedItem) + _T("\\") + m_ListCtrl.GetItemText(nIndex, 0);
 	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl.GetItemText(nIndex, 0);
 	AfxMessageBox(strLocalFilePath);
-	AfxMessageBox( strRemoteFilePath);
+	AfxMessageBox(strRemoteFilePath);
 
 
 	if (ftpConnection->PutFile(strLocalFilePath, strRemoteFilePath))
@@ -697,7 +697,7 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 
 	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
 	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl2.GetItemText(nIndex, 0);
-	CString strLocalFilePath = strLocalPath  + _T("\\") + m_ListCtrl2.GetItemText(nIndex, 0);
+	CString strLocalFilePath = strLocalPath + _T("\\") + m_ListCtrl2.GetItemText(nIndex, 0);
 
 	if (ftpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
 	{
@@ -718,4 +718,3 @@ CString CMFCApplication1Dlg::GetSelectedFtpPath()
 	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
 	return GetFullPathFromTreeItem2(hSelectedItem);
 }
-
