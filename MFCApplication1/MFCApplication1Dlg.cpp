@@ -11,6 +11,7 @@
 #include "ShlObj.h"
 #include "direct.h"
 
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -65,9 +66,9 @@ END_MESSAGE_MAP()
 
 CMFCApplication1Dlg::CMFCApplication1Dlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_MFCAPPLICATION1_DIALOG, pParent)
-	, m_editIP(_T(""))
-	, m_editID(_T(""))
-	, m_editPW(_T(""))
+	, m_editIP(_T("192.168.0.5"))
+	, m_editID(_T("FTP_user"))
+	, m_editPW(_T("1234"))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
 }
@@ -126,7 +127,7 @@ BOOL CMFCApplication1Dlg::OnInitDialog()
 	m_ListCtrl2.InsertColumn(3, _T("Size"), LVCFMT_RIGHT, rt.Width() * 0.2);
 
 	// 디렉토리 로드를 시작할 경로를 설정합니다. 예를 들어, C:\부터 시작할 수 있습니다.
-	CString strInitialPath = _T("C:\\");
+	CString strInitialPath = _T("C:\\Test");
 	LoadDirectoryStructure(strInitialPath, TVI_ROOT);
 
 	return TRUE;
@@ -357,7 +358,7 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 	}
 
 	// 루트 경로를 추가 (C 드라이브 가정)
-	strPath = _T("C:\\") + strPath;
+	strPath = _T("C:\\Test") + strPath;
 
 	m_localPath.SetWindowTextW(strPath);
 
@@ -613,6 +614,39 @@ void CMFCApplication1Dlg::OnMouseMove(UINT nFlags, CPoint point)
 }
 
 /// <summary>
+/// 드레그 시작했을 때의 항목 추출
+/// </summary>
+/// <param name="nFlags"></param>
+/// <param name="point"></param>
+void CMFCApplication1Dlg::OnLButtonDown(UINT nFlags, CPoint point)
+{
+	CWnd* pWnd = GetFocus();
+
+	// List Control에서의 클릭인지 확인
+	if (pWnd == &m_ListCtrl || pWnd == &m_ListCtrl2)
+	{
+		LVHITTESTINFO hitTestInfo;
+		hitTestInfo.pt = point;
+		pWnd->ScreenToClient(&hitTestInfo.pt);
+		int nItem = m_ListCtrl.HitTest(&hitTestInfo);
+
+		if (nItem != -1) // -1은 항목이 없음을 의미
+		{
+			m_nDragIndex = nItem; // 드래그 시작한 항목의 인덱스 저장
+			m_bDragging = TRUE;
+
+			// 드래그 이미지를 생성하고 드래그를 시작합니다.
+			m_pDragImage = m_ListCtrl.CreateDragImage(nItem, &point);
+			m_pDragImage->BeginDrag(0, CPoint(0, 0));
+			m_pDragImage->DragEnter(GetDesktopWindow(), point);
+			::SetCapture(m_hWnd);
+		}
+	}
+
+	CDialogEx::OnLButtonDown(nFlags, point);
+}
+
+/// <summary>
 /// Drop 했을 때 처리 메서드
 /// </summary>
 /// <param name="nFlags"></param>
@@ -627,24 +661,43 @@ void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 		delete m_pDragImage;
 		m_pDragImage = nullptr;
 
+		// 파일인지 폴더인지 확인하는 변수
+		CString draggedItemText = m_ListCtrl.GetItemText(m_nDragIndex, 1);
+		
+
 		// 드롭할 윈도우 탐색
 		ClientToScreen(&point);
 		CWnd* pDropWnd = WindowFromPoint(point);
-
-		if (pDropWnd == &m_ListCtrl2)
-		{
-			// List1에서 List2로 드래그 -> 파일 업로드
-			UploadFileToFtp(m_nDragIndex);
+		if (draggedItemText == "File") {
+			if (pDropWnd == &m_ListCtrl2)
+			{
+				// List1에서 List2로 드래그 -> 파일 업로드
+				UploadFileToFtp(m_nDragIndex);
+			}
+			else if (pDropWnd == &m_ListCtrl)
+			{
+				// List2에서 List1로 드래그 -> 파일 다운로드
+				DownloadFileFromFtp(m_nDragIndex);
+			}
 		}
-		else if (pDropWnd == &m_ListCtrl)
-		{
-			// List2에서 List1로 드래그 -> 파일 다운로드
-			DownloadFileFromFtp(m_nDragIndex);
+		else if (draggedItemText == "Folder") {
+			if (pDropWnd == &m_ListCtrl2)
+			{
+				// List1에서 List2로 드래그 -> 폴더 업로드
+				UploadFolderFromFtp(m_nDragIndex);
+			}
+			else if (pDropWnd == &m_ListCtrl)
+			{
+				// List2에서 List1로 드래그 -> 폴더 다운로드
+				DownloadFileFromFtp(m_nDragIndex);
+			}
 		}
 	}
 
 	CDialogEx::OnLButtonUp(nFlags, point);
 }
+
+
 
 /// <summary>
 /// 파일 업로드 메서드
@@ -710,11 +763,87 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 }
 
 /// <summary>
-/// 선택되 FTP 아이템 경로 메서드
+/// 선택된 FTP 아이템 경로 메서드
 /// </summary>
 /// <returns></returns>
 CString CMFCApplication1Dlg::GetSelectedFtpPath()
 {
 	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
 	return GetFullPathFromTreeItem2(hSelectedItem);
+}
+
+/// <summary>
+/// 폴더 업로드 메서드
+/// </summary>
+/// <param name="nIndex"></param>
+void CMFCApplication1Dlg::UploadFolderFromFtp(int nIndex)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	CString strLocalPath;
+	m_localPath.GetWindowText(strLocalPath);
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl.GetItemText(nIndex, 0);
+	CString strLocalFilePath = strLocalPath + _T("\\") + m_ListCtrl.GetItemText(nIndex, 0);
+
+	// 폴더 생성
+	BOOL result = ftpConnection->CreateDirectory(strRemoteFilePath);
+	if (!result)
+	{
+		AfxMessageBox(_T("폴더가 생성되지 않았습니다."));
+		return;
+	}
+	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
+	UploadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection);
+	AfxMessageBox(_T("성공적으로 폴더를 업로드 했습니다."));
+	
+	
+}
+
+/// <summary>
+/// 재귀 함수를 이요해서 폴더 업로드 메서드
+/// </summary>
+/// <param name="strLocalFolderPath"></param>
+/// <param name="strRemoteFolderPath"></param>
+/// <param name="pFtpConnection"></param>
+void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection)
+{
+	CFileFind finder;
+	BOOL bWorking = finder.FindFile(strLocalFolderPath + _T("\\*.*"));
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+		if (finder.IsDots()) // . and .. directories
+			continue;
+
+		CString strFileName = finder.GetFileName();
+		CString strLocalFilePath = strLocalFolderPath + _T("\\") + strFileName;
+		CString strRemoteFilePath = strRemoteFolderPath + _T("/") + strFileName;
+
+		if (finder.IsDirectory())
+		{
+			// 서브 폴더가 발견되면, 서버에 폴더를 생성하고 재귀 호출
+			if (!pFtpConnection->CreateDirectory(strRemoteFilePath))
+			{
+				AfxMessageBox(_T("Failed to create directory on FTP server: ") + strRemoteFilePath);
+				continue;
+			}
+
+			// 재귀 호출
+			UploadFolderContents(strLocalFilePath, strRemoteFilePath, pFtpConnection);
+		}
+		else
+		{
+			// 파일을 발견하면 FTP 서버로 업로드
+			if (!pFtpConnection->PutFile(strLocalFilePath, strRemoteFilePath))
+			{
+				AfxMessageBox(_T("Failed to upload file: ") + strLocalFilePath);
+			}
+		}
+	}
 }

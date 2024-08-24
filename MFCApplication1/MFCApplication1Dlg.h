@@ -90,6 +90,9 @@ public:
 
 	void DownloadFileFromFtp(int nIndex);
 	CString GetSelectedFtpPath();
+	void UploadFolderFromFtp(int nIndex);
+	void UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection);
+	bool UploadFolderToFtp(const std::string& folderPath, const std::string& ftpDestination);
 	void UploadFolderToFTP(CString localFolderPath, CString remoteFolderPath);
 	void DownloadFolderFromFTP(CString remoteFolderPath, CString localFolderPath);
 	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
