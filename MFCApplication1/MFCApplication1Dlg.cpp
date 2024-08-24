@@ -1,5 +1,4 @@
-﻿﻿
-// MFCApplication1Dlg.cpp: 구현 파일
+﻿﻿// MFCApplication1Dlg.cpp: 구현 파일
 //
 
 #include "pch.h"
@@ -24,7 +23,6 @@ class CAboutDlg : public CDialogEx
 {
 public:
 	CAboutDlg();
-
 	// 대화 상자 데이터입니다.
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_ABOUTBOX };
@@ -38,7 +36,6 @@ protected:
 	int m_nDragIndex;
 	CWnd* m_pDropWnd;
 	CPoint m_ptDropPoint;
-
 	// 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
@@ -99,6 +96,7 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_NOTIFY(TVN_SELCHANGED, IDC_TREE2, &CMFCApplication1Dlg::OnTvnSelchangedTree2)
 	ON_NOTIFY(LVN_BEGINDRAG, IDC_LIST1, &CMFCApplication1Dlg::OnLvnBegindragList1)
 	ON_WM_MOUSEMOVE()
+	ON_WM_LBUTTONDOWN()
 	ON_WM_LBUTTONUP()
 	ON_NOTIFY(LVN_BEGINDRAG, IDC_LIST2, &CMFCApplication1Dlg::OnLvnBegindragList2)
 END_MESSAGE_MAP()
@@ -620,8 +618,12 @@ void CMFCApplication1Dlg::OnMouseMove(UINT nFlags, CPoint point)
 /// <param name="point"></param>
 void CMFCApplication1Dlg::OnLButtonDown(UINT nFlags, CPoint point)
 {
+
 	CWnd* pWnd = GetFocus();
 
+	CString msg;
+	msg.Format(_T("Focused Control: %p"), pWnd);
+	AfxMessageBox(msg); // 현재 포커스된 컨트롤이 무엇인지 확인
 	// List Control에서의 클릭인지 확인
 	if (pWnd == &m_ListCtrl || pWnd == &m_ListCtrl2)
 	{
@@ -629,7 +631,7 @@ void CMFCApplication1Dlg::OnLButtonDown(UINT nFlags, CPoint point)
 		hitTestInfo.pt = point;
 		pWnd->ScreenToClient(&hitTestInfo.pt);
 		int nItem = m_ListCtrl.HitTest(&hitTestInfo);
-
+		
 		if (nItem != -1) // -1은 항목이 없음을 의미
 		{
 			m_nDragIndex = nItem; // 드래그 시작한 항목의 인덱스 저장
@@ -646,6 +648,8 @@ void CMFCApplication1Dlg::OnLButtonDown(UINT nFlags, CPoint point)
 	CDialogEx::OnLButtonDown(nFlags, point);
 }
 
+
+
 /// <summary>
 /// Drop 했을 때 처리 메서드
 /// </summary>
@@ -661,41 +665,50 @@ void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 		delete m_pDragImage;
 		m_pDragImage = nullptr;
 
-		// 파일인지 폴더인지 확인하는 변수
+		// 드래그된 항목의 텍스트 얻기
 		CString draggedItemText = m_ListCtrl.GetItemText(m_nDragIndex, 1);
-		
+		CString draggedItemText2 = m_ListCtrl2.GetItemText(m_nDragIndex, 1);
 
 		// 드롭할 윈도우 탐색
 		ClientToScreen(&point);
 		CWnd* pDropWnd = WindowFromPoint(point);
-		if (draggedItemText == "File") {
-			if (pDropWnd == &m_ListCtrl2)
-			{
+
+		// 디버깅용 로그 출력
+		TRACE("pDropWnd address: %p\n", pDropWnd);
+		TRACE("&m_ListCtrl address: %p\n", &m_ListCtrl);
+		TRACE("&m_ListCtrl2 address: %p\n", &m_ListCtrl2);
+		TRACE("pDropWnd HWND: %p\n", pDropWnd->GetSafeHwnd());
+		TRACE("m_ListCtrl HWND: %p\n", m_ListCtrl.GetSafeHwnd());
+		TRACE("m_ListCtrl2 HWND: %p\n", m_ListCtrl2.GetSafeHwnd());
+
+		// pDropWnd가 m_ListCtrl2를 가리키는지 확인
+		if (pDropWnd->GetSafeHwnd() == m_ListCtrl2.GetSafeHwnd()) {
+			if (draggedItemText == "File") {
 				// List1에서 List2로 드래그 -> 파일 업로드
 				UploadFileToFtp(m_nDragIndex);
 			}
-			else if (pDropWnd == &m_ListCtrl)
-			{
+			else if (draggedItemText == "Folder") {
+				// 폴더 업로드
+				UploadFolderFromFtp(m_nDragIndex);
+			}
+		}
+		// pDropWnd가 m_ListCtrl을 가리키는지 확인
+		else if (pDropWnd->GetSafeHwnd() == m_ListCtrl.GetSafeHwnd()) {
+			if (draggedItemText2 == "File") {
 				// List2에서 List1로 드래그 -> 파일 다운로드
 				DownloadFileFromFtp(m_nDragIndex);
 			}
-		}
-		else if (draggedItemText == "Folder") {
-			if (pDropWnd == &m_ListCtrl2)
-			{
-				// List1에서 List2로 드래그 -> 폴더 업로드
-				UploadFolderFromFtp(m_nDragIndex);
-			}
-			else if (pDropWnd == &m_ListCtrl)
-			{
-				// List2에서 List1로 드래그 -> 폴더 다운로드
-				DownloadFileFromFtp(m_nDragIndex);
+			else if (draggedItemText2 == "Folder") {
+				// 폴더 다운로드
+				DownloadFolderFromFtp(m_nDragIndex);
 			}
 		}
 	}
 
 	CDialogEx::OnLButtonUp(nFlags, point);
 }
+
+
 
 
 
@@ -801,8 +814,6 @@ void CMFCApplication1Dlg::UploadFolderFromFtp(int nIndex)
 	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
 	UploadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection);
 	AfxMessageBox(_T("성공적으로 폴더를 업로드 했습니다."));
-	
-	
 }
 
 /// <summary>
@@ -843,6 +854,78 @@ void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath
 			if (!pFtpConnection->PutFile(strLocalFilePath, strRemoteFilePath))
 			{
 				AfxMessageBox(_T("Failed to upload file: ") + strLocalFilePath);
+			}
+		}
+	}
+}
+
+/// <summary>
+/// 폴더 다운로드 메서드
+/// </summary>
+/// <param name="nIndex"></param>
+void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	CString strLocalPath;
+	m_localPath.GetWindowText(strLocalPath);
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl2.GetItemText(nIndex, 0);
+	CString strLocalFilePath = strLocalPath + _T("\\") + m_ListCtrl2.GetItemText(nIndex, 0);
+
+	// 폴더 생성
+	BOOL result = CreateDirectory(strLocalFilePath,NULL);
+	if (!result)
+	{
+		AfxMessageBox(_T("폴더가 생성되지 않았습니다."));
+		return;
+	}
+	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
+	DownloadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection);
+	AfxMessageBox(_T("성공적으로 폴더를 다운로드 했습니다."));
+}
+
+void CMFCApplication1Dlg::DownloadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection)
+{
+
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	// 파일 찾기 객체 생성
+	CFtpFileFind fileFind(ftpConnection);
+
+	BOOL bWorking = fileFind.FindFile(strRemoteFolderPath + _T("\\*.*"));
+	while (bWorking)
+	{
+		bWorking = fileFind.FindNextFile();
+		if (fileFind.IsDots()) // . and .. directories
+			continue;
+
+		CString strFileName = fileFind.GetFileName();
+		CString strLocalFilePath = strLocalFolderPath + _T("\\") + strFileName;
+		CString strRemoteFilePath = strRemoteFolderPath + _T("/") + strFileName;
+
+		if (fileFind.IsDirectory())
+		{
+			// 서브 폴더가 발견되면, 로컬 폴더를 생성하고 재귀 호출
+			CreateDirectory(strLocalFilePath, NULL);
+			DownloadFolderContents(strLocalFilePath,strRemoteFilePath, pFtpConnection);
+		}
+		else
+		{
+			// 파일을 발견하면 FTP 서버에서 로컬로 다운로드
+			if (!pFtpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
+			{
+				AfxMessageBox(_T("Failed to download file: ") + strRemoteFilePath);
 			}
 		}
 	}

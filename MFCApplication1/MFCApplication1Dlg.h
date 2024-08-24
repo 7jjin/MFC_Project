@@ -47,7 +47,6 @@ public:
 // 구현입니다.
 protected:
 	HICON m_hIcon;
-
 	// 생성된 메시지 맵 함수
 	virtual BOOL OnInitDialog();
 	afx_msg void OnSysCommand(UINT nID, LPARAM lParam);
@@ -75,26 +74,20 @@ public:
 	void LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem);
 	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
 	afx_msg void OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult);
-	afx_msg
-		CString AddRemoteFile(const CString strCurrentRemoteDir, const WIN32_FIND_DATAA& find_data, FILE_LIST& file_list);
-	CString GetFullPathFromTreeItem2(HTREEITEM hItem);
+	afx_msg CString GetFullPathFromTreeItem2(HTREEITEM hItem);
 	void OnLvnBegindragList1(NMHDR* pNMHDR, LRESULT* pResult);
 	void OnLvnBegindragList2(NMHDR* pNMHDR, LRESULT* pResult);
 	void OnMouseMove(UINT nFlags, CPoint point);
 	void OnLButtonUp(UINT nFlags, CPoint point);
 	void UploadFileToFtp(int nIndex);
 	void OnLButtonDown(UINT nFlags, CPoint point);
-	void UploadFileToFtp(CString localFilePath, CString remoteFilePath);
-
-	void DownloadFileFromFtp(CString remoteFilePath, CString localFilePath);
 
 	void DownloadFileFromFtp(int nIndex);
 	CString GetSelectedFtpPath();
 	void UploadFolderFromFtp(int nIndex);
 	void UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection);
-	bool UploadFolderToFtp(const std::string& folderPath, const std::string& ftpDestination);
-	void UploadFolderToFTP(CString localFolderPath, CString remoteFolderPath);
-	void DownloadFolderFromFTP(CString remoteFolderPath, CString localFolderPath);
+	void DownloadFolderFromFtp(int nIndex);
+	void DownloadFolderContents(const CString& strRemoteFolderPath, const CString& strLocalFolderPath, CFtpConnection* pFtpConnection);
 	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);
 	
