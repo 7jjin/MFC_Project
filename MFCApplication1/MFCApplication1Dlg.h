@@ -66,6 +66,9 @@ public:
 	CListCtrl m_ListCtrl2;
 	CEdit m_localPath;
 	CEdit m_remotePath;
+	int g_totalFiles = 0;
+	int g_uploadedFiles = 0;
+	int g_downloadedFiles = 0;
 	
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
@@ -85,8 +88,12 @@ public:
 	void DownloadFileFromFtp(int nIndex);
 	CString GetSelectedFtpPath();
 	void UploadFolderFromFtp(int nIndex);
+	int CountFilesInFolder(const CString& strLocalFolderPath);
+	void UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl);
 	void UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection);
 	void DownloadFolderFromFtp(int nIndex);
+	int CountFilesInFolderOnFtp(CFtpConnection* pFtpConnection, const CString& strRemoteFolderPath);
+	void DownloadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl);
 	void DownloadFolderContents(const CString& strRemoteFolderPath, const CString& strLocalFolderPath, CFtpConnection* pFtpConnection);
 	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);

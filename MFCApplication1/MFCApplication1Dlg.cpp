@@ -29,6 +29,8 @@ public:
 #endif
 
 protected:
+	int g_totalFiles = 0;
+	int g_uploadedFiles = 0;
 	virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV 지원입니다.
 	// Drag & Drop 관련 멤버 변수
 	BOOL m_bDragging;
@@ -911,18 +913,50 @@ void CMFCApplication1Dlg::UploadFolderFromFtp(int nIndex)
 		AfxMessageBox(_T("폴더가 생성되지 않았습니다."));
 		return;
 	}
+
+	// 총 파일 개수를 계산
+	g_totalFiles = CountFilesInFolder(strLocalFilePath);
+	g_uploadedFiles = 0; // 초기화
+
+	// 프로그래스 바 초기화
+	CProgressCtrl* pProgressCtrl = (CProgressCtrl*)GetDlgItem(IDC_PROGRESS1);
+	pProgressCtrl->SetRange(0, 100);
+	pProgressCtrl->SetPos(0);
+
 	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
-	UploadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection);
+	UploadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
+
 	AfxMessageBox(_T("성공적으로 폴더를 업로드 했습니다."));
 }
 
-/// <summary>
-/// 재귀 함수를 이요해서 폴더 업로드 메서드
-/// </summary>
-/// <param name="strLocalFolderPath"></param>
-/// <param name="strRemoteFolderPath"></param>
-/// <param name="pFtpConnection"></param>
-void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection)
+int CMFCApplication1Dlg::CountFilesInFolder(const CString& strLocalFolderPath)
+{
+	CFileFind finder;
+	CString strSearchPath = strLocalFolderPath + _T("\\*.*");
+	BOOL bWorking = finder.FindFile(strSearchPath);
+	int fileCount = 0;
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+		if (finder.IsDots()) // . and .. directories
+			continue;
+
+		if (finder.IsDirectory())
+		{
+			// 서브 폴더의 파일 개수도 포함
+			fileCount += CountFilesInFolder(strLocalFolderPath + _T("\\") + finder.GetFileName());
+		}
+		else
+		{
+			fileCount++;
+		}
+	}
+
+	return fileCount;
+}
+
+void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl)
 {
 	CFileFind finder;
 	BOOL bWorking = finder.FindFile(strLocalFolderPath + _T("\\*.*"));
@@ -946,7 +980,7 @@ void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath
 			}
 
 			// 재귀 호출
-			UploadFolderContents(strLocalFilePath, strRemoteFilePath, pFtpConnection);
+			UploadFolderContents(strLocalFilePath, strRemoteFilePath, pFtpConnection, pProgressCtrl);
 		}
 		else
 		{
@@ -955,14 +989,15 @@ void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath
 			{
 				AfxMessageBox(_T("Failed to upload file: ") + strLocalFilePath);
 			}
+
+			// 업로드된 파일 수를 증가시키고 프로그래스 바 업데이트
+			g_uploadedFiles++;
+			int nProgress = (int)(((double)g_uploadedFiles / g_totalFiles) * 100.0);
+			pProgressCtrl->SetPos(nProgress);
 		}
 	}
 }
 
-/// <summary>
-/// 폴더 다운로드 메서드
-/// </summary>
-/// <param name="nIndex"></param>
 void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
 {
 	// 인터넷 세션 객체 생성
@@ -979,30 +1014,78 @@ void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
 	CString strLocalFilePath = strLocalPath + _T("\\") + m_ListCtrl2.GetItemText(nIndex, 0);
 
 	// 폴더 생성
-	BOOL result = CreateDirectory(strLocalFilePath,NULL);
+	BOOL result = CreateDirectory(strLocalFilePath, NULL);
 	if (!result)
 	{
 		AfxMessageBox(_T("폴더가 생성되지 않았습니다."));
 		return;
 	}
-	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
-	DownloadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection);
+
+	// 총 파일 개수를 계산
+	g_totalFiles = CountFilesInFolderOnFtp(ftpConnection, strRemoteFilePath);
+	g_downloadedFiles = 0; // 초기화
+
+	// 프로그래스 바 초기화
+	CProgressCtrl* pProgressCtrl = (CProgressCtrl*)GetDlgItem(IDC_PROGRESS1);
+	pProgressCtrl->SetRange(0, 100);
+	pProgressCtrl->SetPos(0);
+
+	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 다운로드
+	DownloadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
+
 	AfxMessageBox(_T("성공적으로 폴더를 다운로드 했습니다."));
 }
 
-void CMFCApplication1Dlg::DownloadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection)
+int CMFCApplication1Dlg::CountFilesInFolderOnFtp(CFtpConnection* pFtpConnection, const CString& strRemoteFolderPath)
 {
-
 	// 인터넷 세션 객체 생성
 	CInternetSession internetSession;
 
 	// FTP 서버에 연결
 	CFtpConnection* ftpConnection = nullptr;
 
-	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
-	// 파일 찾기 객체 생성
-	CFtpFileFind fileFind(ftpConnection);
+	CString strLocalPath;
+	m_localPath.GetWindowText(strLocalPath);
 
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CFtpFileFind fileFind(ftpConnection);
+	CString strSearchPath = strRemoteFolderPath + _T("/*.*");
+	BOOL bWorking = fileFind.FindFile(strSearchPath);
+	int fileCount = 0;
+
+	while (bWorking)
+	{
+		bWorking = fileFind.FindNextFile();
+		if (fileFind.IsDots()) // . and .. directories
+			continue;
+
+		if (fileFind.IsDirectory())
+		{
+			// 서브 폴더의 파일 개수도 포함
+			fileCount += CountFilesInFolderOnFtp(ftpConnection, strRemoteFolderPath + _T("/") + fileFind.GetFileName());
+		}
+		else
+		{
+			fileCount++;
+		}
+	}
+
+	return fileCount;
+}
+
+void CMFCApplication1Dlg::DownloadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	CString strLocalPath;
+	m_localPath.GetWindowText(strLocalPath);
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CFtpFileFind fileFind(ftpConnection);
 	BOOL bWorking = fileFind.FindFile(strRemoteFolderPath + _T("\\*.*"));
 	while (bWorking)
 	{
@@ -1018,15 +1101,20 @@ void CMFCApplication1Dlg::DownloadFolderContents(const CString& strLocalFolderPa
 		{
 			// 서브 폴더가 발견되면, 로컬 폴더를 생성하고 재귀 호출
 			CreateDirectory(strLocalFilePath, NULL);
-			DownloadFolderContents(strLocalFilePath,strRemoteFilePath, pFtpConnection);
+			DownloadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
 		}
 		else
 		{
 			// 파일을 발견하면 FTP 서버에서 로컬로 다운로드
-			if (!pFtpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
+			if (!ftpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
 			{
 				AfxMessageBox(_T("Failed to download file: ") + strRemoteFilePath);
 			}
+
+			// 다운로드된 파일 수를 증가시키고 프로그래스 바 업데이트
+			g_downloadedFiles++;
+			int nProgress = (int)(((double)g_downloadedFiles / g_totalFiles) * 100.0);
+			pProgressCtrl->SetPos(nProgress);
 		}
 	}
 }
