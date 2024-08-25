@@ -442,72 +442,50 @@ void CMFCApplication1Dlg::OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult)
 	// List Control 초기화
 	m_ListCtrl2.DeleteAllItems();
 
-	// 스택을 사용하여 디렉토리 탐색
-	std::stack<CString> directories;
-	directories.push(strSelectedPath);
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+
+	// 파일 찾기 객체 생성
+	CFtpFileFind fileFind(ftpConnection);
+
+	CString strSearchPath = strSelectedPath;
+
+	BOOL bWorking = fileFind.FindFile(strSearchPath + _T("\\*.*"));
 
 	int nIndex = 0;
 
-	while (!directories.empty())
+	while (bWorking)
 	{
-		CString currentPath = directories.top();
-		directories.pop();
+		bWorking = fileFind.FindNextFile();
 
-		// 인터넷 세션 객체 생성
-		CInternetSession internetSession;
+		if (fileFind.IsDots())
+			continue;
 
-		// FTP 서버에 연결
-		CFtpConnection* ftpConnection = nullptr;
+		CString strFileName = fileFind.GetFileName();
+		BOOL bIsDirectory = fileFind.IsDirectory();
+		ULONGLONG fileSize = fileFind.GetLength();
+		CTime lastModified;
+		fileFind.GetLastWriteTime(lastModified);
+		CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
 
-		ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+		// 리스트 컨트롤에 파일 또는 디렉토리 정보 추가
+		int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
+		m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
+		m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
 
-		// 파일 찾기 객체 생성
-		CFtpFileFind fileFind(ftpConnection);
-
-
-		CString strSearchPath = currentPath;
-
-		BOOL bWorking = fileFind.FindFile(strSearchPath + _T("\\*.*"));
-
-		while (bWorking)
+		if (!bIsDirectory)
 		{
-			bWorking = fileFind.FindNextFile();
-
-			if (fileFind.IsDots())
-				continue;
-
-			CString strFileName = fileFind.GetFileName();
-			BOOL bIsDirectory = fileFind.IsDirectory();
-			ULONGLONG fileSize = fileFind.GetLength();
-			CTime lastModified;
-			fileFind.GetLastWriteTime(lastModified);
-			CString strLastModified = lastModified.Format(_T("%Y-%m-%d %H:%M:%S"));
-
-			// 리스트 컨트롤에 파일 또는 디렉토리 정보 추가
-			int nItem = m_ListCtrl2.InsertItem(nIndex++, strFileName);
-			m_ListCtrl2.SetItemText(nItem, 1, bIsDirectory ? _T("Folder") : _T("File"));
-			m_ListCtrl2.SetItemText(nItem, 2, strLastModified);
-
-			if (!bIsDirectory)
-			{
-				CString strFileSize;
-				strFileSize.Format(_T("%llu bytes"), fileSize);
-				m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
-			}
-
-			// 디렉토리인 경우 스택에 추가
-			if (bIsDirectory)
-			{
-				CString strSubDir = currentPath;
-				if (strSubDir.Right(1) != _T("/"))
-					strSubDir += _T("/");
-
-				strSubDir += strFileName;
-				directories.push(strSubDir);
-			}
+			CString strFileSize;
+			strFileSize.Format(_T("%llu bytes"), fileSize);
+			m_ListCtrl2.SetItemText(nItem, 3, strFileSize);
 		}
-		fileFind.Close();
 	}
+	fileFind.Close();
 
 	*pResult = 0;
 }
