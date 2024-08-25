@@ -82,6 +82,7 @@ void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_LIST2, m_ListCtrl2);
 	DDX_Control(pDX, IDC_EDIT_LOCAL_PATH, m_localPath);
 	DDX_Control(pDX, IDC_EDIT_REMOTE_PATH, m_remotePath);
+	DDX_Control(pDX, IDC_PROGRESS1, m_ProgressCtrl);
 }
 
 BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
@@ -710,19 +711,77 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
 	CString strLocalFilePath = GetFullPathFromTreeItem(hSelectedItem) + _T("\\") + m_ListCtrl.GetItemText(nIndex, 0);
 	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl.GetItemText(nIndex, 0);
-	AfxMessageBox(strLocalFilePath);
-	AfxMessageBox(strRemoteFilePath);
 
+	// 프로그래스 바 초기화
+	CProgressCtrl* pProgressCtrl = (CProgressCtrl*)GetDlgItem(IDC_PROGRESS1);
+	pProgressCtrl->SetRange(0, 100);
+	pProgressCtrl->SetPos(0);
 
-	if (ftpConnection->PutFile(strLocalFilePath, strRemoteFilePath))
-	{
-		AfxMessageBox(_T("파일 업로드 성공!"));
+	// 로컬 파일 열기
+	CFile localFile;
+	if (!localFile.Open(strLocalFilePath, CFile::modeRead | CFile::typeBinary)) {
+		AfxMessageBox(_T("로컬 파일을 열 수 없습니다."));
+		return;
 	}
-	else
-	{
-		AfxMessageBox(_T("파일 업로드 실패!"));
+
+	// 파일 크기 가져오기
+	DWORD dwFileSize = (DWORD)localFile.GetLength();
+
+	// 파일 크기가 0인 경우
+	if (dwFileSize == 0) {
+		// 빈 파일이라도 원격 파일을 열어야 함
+		CInternetFile* remoteFile = ftpConnection->OpenFile(strRemoteFilePath, GENERIC_WRITE, FTP_TRANSFER_TYPE_BINARY | INTERNET_FLAG_TRANSFER_BINARY);
+
+		if (!remoteFile) {
+			AfxMessageBox(_T("원격 파일을 열 수 없습니다."));
+			localFile.Close();
+			return;
+		}
+
+		// 프로그래스 바를 100%로 설정
+		pProgressCtrl->SetPos(100);
+
+		// 파일 닫기
+		remoteFile->Close();
+		delete remoteFile;
+		AfxMessageBox(_T("빈 파일 업로드 완료!"));
+	}
+	else {
+		// 파일이 0바이트가 아닌 경우
+		DWORD dwBytesRead = 0;
+		DWORD dwTotalBytesRead = 0;
+		const int bufferSize = 4096;  // 4KB 버퍼
+		byte buffer[bufferSize];
+
+		// 원격 파일 열기 (쓰기 모드)
+		CInternetFile* remoteFile = ftpConnection->OpenFile(strRemoteFilePath, GENERIC_WRITE, FTP_TRANSFER_TYPE_BINARY | INTERNET_FLAG_TRANSFER_BINARY);
+
+		if (!remoteFile) {
+			AfxMessageBox(_T("원격 파일을 열 수 없습니다."));
+			localFile.Close();
+			return;
+		}
+
+		// 파일을 청크 단위로 읽어 전송하면서 프로그래스 바 업데이트
+		while ((dwBytesRead = localFile.Read(buffer, bufferSize)) > 0)
+		{
+			remoteFile->Write(buffer, dwBytesRead);
+			dwTotalBytesRead += dwBytesRead;
+
+			// 프로그래스 바 업데이트
+			int nProgress = (int)(((double)dwTotalBytesRead / dwFileSize) * 100.0);
+			pProgressCtrl->SetPos(nProgress);
+		}
+
+		// 파일 닫기
+		localFile.Close();
+		remoteFile->Close();
+		delete remoteFile;
+		AfxMessageBox(_T("파일 업로드 완료!"));
 	}
 }
+
+
 
 /// <summary>
 /// 파일 다운로드 메서드
@@ -743,15 +802,78 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 	CString strRemoteFilePath = GetSelectedFtpPath() + _T("/") + m_ListCtrl2.GetItemText(nIndex, 0);
 	CString strLocalFilePath = strLocalPath + _T("\\") + m_ListCtrl2.GetItemText(nIndex, 0);
 
-	if (ftpConnection->GetFile(strRemoteFilePath, strLocalFilePath))
-	{
-		AfxMessageBox(_T("파일 다운로드 성공!"));
+	// 프로그래스 바 초기화
+	CProgressCtrl* pProgressCtrl = (CProgressCtrl*)GetDlgItem(IDC_PROGRESS1);
+	pProgressCtrl->SetRange(0, 100);
+	pProgressCtrl->SetPos(0);
+
+	// 원격 파일 열기
+	CInternetFile* remoteFile = nullptr;
+	try {
+		remoteFile = ftpConnection->OpenFile(strRemoteFilePath, GENERIC_READ, FTP_TRANSFER_TYPE_BINARY | INTERNET_FLAG_TRANSFER_BINARY);
+
+		if (!remoteFile) {
+			AfxMessageBox(_T("원격 파일을 열 수 없습니다."));
+			return;
+		}
+
+		// 로컬 파일 열기
+		CFile localFile;
+		if (!localFile.Open(strLocalFilePath, CFile::modeCreate | CFile::modeWrite | CFile::typeBinary)) {
+			AfxMessageBox(_T("로컬 파일을 열 수 없습니다."));
+			remoteFile->Close();
+			delete remoteFile;
+			return;
+		}
+
+		// 원격 파일 크기 가져오기
+		DWORD dwFileSize = (DWORD)remoteFile->GetLength();
+
+		if (dwFileSize == 0) {
+			// 파일 크기가 0일 때의 경우
+			
+			localFile.Close();
+			remoteFile->Close();
+			delete remoteFile;
+			pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
+			AfxMessageBox(_T("파일 다운로드 완료!"));
+			return;
+		}
+
+		DWORD dwBytesRead = 0;
+		DWORD dwTotalBytesRead = 0;
+		const int bufferSize = 4096;  // 4KB 버퍼
+		byte buffer[bufferSize];
+
+		// 파일을 청크 단위로 읽어 저장하면서 프로그래스 바 업데이트
+		while ((dwBytesRead = remoteFile->Read(buffer, bufferSize)) > 0)
+		{
+			localFile.Write(buffer, dwBytesRead);
+			dwTotalBytesRead += dwBytesRead;
+
+			// 프로그래스 바 업데이트
+			int nProgress = (int)(((double)dwTotalBytesRead / dwFileSize) * 100.0);
+			pProgressCtrl->SetPos(nProgress);
+		}
+
+		// 파일 닫기
+		localFile.Close();
+		remoteFile->Close();
+		delete remoteFile;
+
+		
+		pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
+		AfxMessageBox(_T("파일 다운로드 완료!"));
 	}
-	else
-	{
-		AfxMessageBox(_T("파일 다운로드 실패!"));
+	catch (CInternetException* pEx) {
+		TCHAR szError[1024];
+		pEx->GetErrorMessage(szError, 1024);
+		CString strError = _T("인터넷 오류: ") + CString(szError);
+		AfxMessageBox(strError);
+		pEx->Delete();
 	}
 }
+
 
 /// <summary>
 /// 선택된 FTP 아이템 경로 메서드
