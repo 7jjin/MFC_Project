@@ -85,6 +85,7 @@ void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 	DDX_Control(pDX, IDC_EDIT_LOCAL_PATH, m_localPath);
 	DDX_Control(pDX, IDC_EDIT_REMOTE_PATH, m_remotePath);
 	DDX_Control(pDX, IDC_PROGRESS1, m_ProgressCtrl);
+	DDX_Control(pDX, IDC_EDIT1, m_Logtext);
 }
 
 BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
@@ -199,6 +200,49 @@ void CMFCApplication1Dlg::OnBnClickedCancel()
 }
 
 
+
+
+/// <summary>
+/// 현재 시간 반환 메서드
+/// </summary>
+/// <returns></returns>
+CString GetFormattedCurrentTime()
+{
+	// 현재 시간 가져오기
+	CTime t = CTime::GetCurrentTime();
+
+	// 원하는 형식으로 시간 포맷
+	CString strTime = t.Format("%Y-%m-%d %H:%M:%S  ");
+
+	return strTime;
+}
+
+void CMFCApplication1Dlg::AppendTextToEditControl(CString newText)
+{
+    // Edit Control의 현재 텍스트를 가져옴
+    CString currentText;
+	m_Logtext.GetWindowText(currentText);
+
+    // 기존 텍스트에 줄바꿈과 함께 새 텍스트 추가
+    if (!currentText.IsEmpty()) // 기존 텍스트가 비어 있지 않으면 줄바꿈 추가
+    {
+        currentText += _T("\r\n");
+    }
+    currentText += newText;
+
+    // Edit Control에 업데이트된 텍스트 설정
+	m_Logtext.SetWindowText(currentText);
+
+    // 텍스트의 끝으로 커서를 이동
+    int nLength = m_Logtext.GetWindowTextLength();
+	m_Logtext.SetSel(nLength, nLength);
+
+    // 현재의 총 라인 수를 가져와서 마지막 라인으로 스크롤 이동
+    int nLineCount = m_Logtext.GetLineCount();
+	m_Logtext.LineScroll(nLineCount - 1);
+}
+
+
 // FTP 연결 메서드
 void CMFCApplication1Dlg::OnBnClickedButtonConnect()
 {
@@ -216,6 +260,7 @@ void CMFCApplication1Dlg::OnBnClickedButtonConnect()
 		}
 
 		m_pFtpConnection = session.GetFtpConnection(m_editIP, m_editID, m_editPW);
+		AppendTextToEditControl(GetFormattedCurrentTime() +_T("FTP 연결 성공\n"));
 		AfxMessageBox(_T("FTP 연결 성공"));
 
 		// FTP 디렉토리 트리 로드
@@ -238,11 +283,11 @@ void CMFCApplication1Dlg::OnBnClickedButtonDisconnect()
 		m_pFtpConnection->Close();
 		delete m_pFtpConnection;
 		m_pFtpConnection = nullptr;
-
-		AfxMessageBox(_T("FTP 연결이 해제되었습니다."));
+		AppendTextToEditControl(GetFormattedCurrentTime() + _T("FTP 연결이 해제되었습니다."));
 	}
 	else
 	{
+		m_Logtext.SetWindowText(GetFormattedCurrentTime() + _T("현재 활성화된 FTP 연결이 없습니다.\n"));
 		AfxMessageBox(_T("현재 활성화된 FTP 연결이 없습니다."));
 	}
 }
@@ -691,7 +736,7 @@ void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 
 
 
-
+////////////////////////////////////////////////////// 업로드/다운로드 메서드/////////////////////////////////////////////////////////////////////////////
 
 /// <summary>
 /// 파일 업로드 메서드
@@ -746,7 +791,6 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 		// 파일 닫기
 		remoteFile->Close();
 		delete remoteFile;
-		AfxMessageBox(_T("빈 파일 업로드 완료!"));
 	}
 	else {
 		// 파일이 0바이트가 아닌 경우
@@ -779,10 +823,9 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 		localFile.Close();
 		remoteFile->Close();
 		delete remoteFile;
-		AfxMessageBox(_T("파일 업로드 완료!"));
+		m_Logtext.SetWindowText(GetFormattedCurrentTime() + m_ListCtrl.GetItemText(nIndex, 0) + _T(" 파일 업로드 완료!\n"));
 	}
 }
-
 
 
 /// <summary>
@@ -838,7 +881,7 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 			remoteFile->Close();
 			delete remoteFile;
 			pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
-			AfxMessageBox(_T("파일 다운로드 완료!"));
+			AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
 			return;
 		}
 
@@ -865,7 +908,7 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 
 		
 		pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
-		AfxMessageBox(_T("파일 다운로드 완료!"));
+		AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
 	}
 	catch (CInternetException* pEx) {
 		TCHAR szError[1024];
@@ -925,10 +968,15 @@ void CMFCApplication1Dlg::UploadFolderFromFtp(int nIndex)
 
 	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
 	UploadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
+	AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl.GetItemText(nIndex, 0) + _T(" 폴더 업로드 완료!\n"));
 
-	AfxMessageBox(_T("성공적으로 폴더를 업로드 했습니다."));
 }
 
+/// <summary>
+/// 업로드 폴더 갯수 반환 메서드
+/// </summary>
+/// <param name="strLocalFolderPath"></param>
+/// <returns></returns>
 int CMFCApplication1Dlg::CountFilesInFolder(const CString& strLocalFolderPath)
 {
 	CFileFind finder;
@@ -956,6 +1004,13 @@ int CMFCApplication1Dlg::CountFilesInFolder(const CString& strLocalFolderPath)
 	return fileCount;
 }
 
+/// <summary>
+/// 하위 디렉토리 업로드 메서드
+/// </summary>
+/// <param name="strLocalFolderPath"></param>
+/// <param name="strRemoteFolderPath"></param>
+/// <param name="pFtpConnection"></param>
+/// <param name="pProgressCtrl"></param>
 void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl)
 {
 	CFileFind finder;
@@ -998,6 +1053,10 @@ void CMFCApplication1Dlg::UploadFolderContents(const CString& strLocalFolderPath
 	}
 }
 
+/// <summary>
+/// 폴더 다운로드 메서드
+/// </summary>
+/// <param name="nIndex"></param>
 void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
 {
 	// 인터넷 세션 객체 생성
@@ -1033,9 +1092,15 @@ void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
 	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 다운로드
 	DownloadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
 
-	AfxMessageBox(_T("성공적으로 폴더를 다운로드 했습니다."));
+	AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 폴더 다운로드 완료!\n"));
 }
 
+/// <summary>
+/// 다운로드 폴더 갯수 반환 메서드
+/// </summary>
+/// <param name="pFtpConnection"></param>
+/// <param name="strRemoteFolderPath"></param>
+/// <returns></returns>
 int CMFCApplication1Dlg::CountFilesInFolderOnFtp(CFtpConnection* pFtpConnection, const CString& strRemoteFolderPath)
 {
 	// 인터넷 세션 객체 생성
@@ -1073,6 +1138,13 @@ int CMFCApplication1Dlg::CountFilesInFolderOnFtp(CFtpConnection* pFtpConnection,
 	return fileCount;
 }
 
+/// <summary>
+/// 다운로드 하위 디렉토리 반환 메서드
+/// </summary>
+/// <param name="strLocalFolderPath"></param>
+/// <param name="strRemoteFolderPath"></param>
+/// <param name="pFtpConnection"></param>
+/// <param name="pProgressCtrl"></param>
 void CMFCApplication1Dlg::DownloadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl)
 {
 	// 인터넷 세션 객체 생성

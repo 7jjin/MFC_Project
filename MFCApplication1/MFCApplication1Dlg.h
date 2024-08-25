@@ -56,6 +56,8 @@ protected:
 public:
 	afx_msg void OnBnClickedOk();
 	afx_msg void OnBnClickedCancel();
+
+	void AddTextToEditControl(CString newText);
 	
 	CString m_editIP;	// ip
 	CString m_editID;	// id
@@ -66,6 +68,7 @@ public:
 	CListCtrl m_ListCtrl2;
 	CEdit m_localPath;
 	CEdit m_remotePath;
+	CEdit m_Logtext;
 	int g_totalFiles = 0;
 	int g_uploadedFiles = 0;
 	int g_downloadedFiles = 0;
@@ -73,7 +76,9 @@ public:
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
 	afx_msg void OnBnClickedButtonDisconnect();
-	afx_msg void OnBnClickedButtonConnect();
+	afx_msg
+		void AppendTextToEditControl(CString newText);
+	void OnBnClickedButtonConnect();
 	void LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem);
 	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
 	afx_msg void OnTvnSelchangedTree1(NMHDR* pNMHDR, LRESULT* pResult);
@@ -99,4 +104,5 @@ public:
 	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);
 	
 	CProgressCtrl m_ProgressCtrl;
+	
 };
