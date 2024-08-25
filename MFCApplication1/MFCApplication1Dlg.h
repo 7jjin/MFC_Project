@@ -99,10 +99,17 @@ public:
 	void DownloadFolderFromFtp(int nIndex);
 	int CountFilesInFolderOnFtp(CFtpConnection* pFtpConnection, const CString& strRemoteFolderPath);
 	void DownloadFolderContents(const CString& strLocalFolderPath, const CString& strRemoteFolderPath, CFtpConnection* pFtpConnection, CProgressCtrl* pProgressCtrl);
+	void ClearFtpDirectory(CFtpConnection* pFtpConnection, const CString& strPath);
+	void ClearFtpDirectory(CFtpConnection* pFtpConnection, const CString& strPath, bool bKeepRoot);
+	void UploadLocalDirectory(CFtpConnection* pFtpConnection, const CString& strLocalPath, const CString& strFtpPath);
 	void DownloadFolderContents(const CString& strRemoteFolderPath, const CString& strLocalFolderPath, CFtpConnection* pFtpConnection);
 	afx_msg void OnTvnSelchangedTree2(NMHDR* pNMHDR, LRESULT* pResult);
 	afx_msg CString GetFullPathFromTreeItem(HTREEITEM hItem);
 	
 	CProgressCtrl m_ProgressCtrl;
 	
+	afx_msg void OnBnClickedButton1();
+	void ClearLocalDirectory(const CString& strPath);
+	void DownloadFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath, const CString& strLocalPath);
+	afx_msg void OnBnClickedButton2();
 };

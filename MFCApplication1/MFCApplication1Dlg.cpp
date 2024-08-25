@@ -103,6 +103,8 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_WM_LBUTTONDOWN()
 	ON_WM_LBUTTONUP()
 	ON_NOTIFY(LVN_BEGINDRAG, IDC_LIST2, &CMFCApplication1Dlg::OnLvnBegindragList2)
+	ON_BN_CLICKED(IDC_BUTTON1, &CMFCApplication1Dlg::OnBnClickedButton1)
+	ON_BN_CLICKED(IDC_BUTTON2, &CMFCApplication1Dlg::OnBnClickedButton2)
 END_MESSAGE_MAP()
 
 
@@ -1189,4 +1191,280 @@ void CMFCApplication1Dlg::DownloadFolderContents(const CString& strLocalFolderPa
 			pProgressCtrl->SetPos(nProgress);
 		}
 	}
+}
+
+/// <summary>
+/// 하위 디렉토리 목록 모두 삭제 메서드
+/// </summary>
+/// <param name="pFtpConnection"></param>
+/// <param name="strPath"></param>
+void CMFCApplication1Dlg::ClearFtpDirectory(CFtpConnection* pFtpConnection, const CString& strPath, bool bKeepRoot = false)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CString strSearchPath = strPath;
+	if (strSearchPath.Right(1) != _T("/"))
+		strSearchPath += _T("/");
+
+	// FTP 파일 찾기 객체 생성
+	CFtpFileFind finder(ftpConnection);
+	BOOL bWorking = finder.FindFile(strSearchPath + _T("*"));
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		// "."과 ".."을 무시
+		if (finder.IsDots())
+			continue;
+
+		CString strFileName = finder.GetFileName();
+		CString strFilePath = strSearchPath + strFileName;
+
+		if (finder.IsDirectory())
+		{
+			// 하위 디렉토리 비우기
+			ClearFtpDirectory(ftpConnection, strFilePath, false);
+
+			// 빈 디렉토리 삭제 시도
+			if (!bKeepRoot)
+			{
+				// 빈 디렉토리 삭제
+				if (ftpConnection->RemoveDirectory(strFilePath))
+				{
+					TRACE(_T("Successfully removed directory: %s\n"), strFilePath);
+				}
+				else
+				{
+					TRACE(_T("Failed to remove directory: %s\n"), strFilePath);
+				}
+			}
+		}
+		else
+		{
+			// 파일인 경우, 삭제
+			if (ftpConnection->Remove(strFilePath))
+			{
+				TRACE(_T("Successfully deleted file: %s\n"), strFilePath);
+			}
+			else
+			{
+				TRACE(_T("Failed to delete file: %s\n"), strFilePath);
+			}
+		}
+	}
+	finder.Close();
+
+	// 빈 디렉토리 삭제 시도 (이때까지 하위 항목이 모두 삭제된 상태)
+	if (!bKeepRoot)
+	{
+		// 빈 디렉토리 삭제
+		if (ftpConnection->RemoveDirectory(strPath))
+		{
+			TRACE(_T("Successfully removed directory: %s\n"), strPath);
+		}
+		else
+		{
+			TRACE(_T("Failed to remove directory: %s\n"), strPath);
+		}
+	}
+}
+
+void CMFCApplication1Dlg::UploadLocalDirectory(CFtpConnection* pFtpConnection, const CString& strLocalPath, const CString& strFtpPath)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CFileFind finder;
+	CString strWildcard(strLocalPath);
+	strWildcard += _T("\\*.*");
+
+	BOOL bWorking = finder.FindFile(strWildcard);
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		// "."과 ".."을 무시
+		if (finder.IsDots())
+			continue;
+
+		CString strFilePath = finder.GetFilePath();
+		CString strFileName = finder.GetFileName();
+		CString strFtpFilePath = strFtpPath + _T("/") + strFileName;
+
+		if (finder.IsDirectory())
+		{
+			// 디렉토리인 경우, FTP 서버에 디렉토리 생성하고 재귀적으로 하위 디렉토리 업로드
+			if (!ftpConnection->CreateDirectory(strFtpFilePath))
+			{
+				TRACE(_T("Failed to create directory: %s\n"), strFtpFilePath);
+			}
+			UploadLocalDirectory(ftpConnection, strFilePath, strFtpFilePath);
+		}
+		else
+		{
+			// 파일인 경우, FTP 서버에 파일 업로드
+			if (!ftpConnection->PutFile(strFilePath, strFtpFilePath))
+			{
+				TRACE(_T("Failed to upload file: %s\n"), strFilePath);
+			}
+		}
+	}
+	finder.Close();
+}
+
+void CMFCApplication1Dlg::OnBnClickedButton1()
+{
+	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+	// FTP 서버에 연결
+	CInternetSession internetSession;
+	CFtpConnection* ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+
+	// 현재 FTP 디렉토리 경로
+	CString strFtpCurrentPath = GetFullPathFromTreeItem2(m_TreeCtrl2.GetSelectedItem());
+	// 로컬 디렉토리 경로
+	CString strLocalPath = GetFullPathFromTreeItem(m_TreeCtrl.GetSelectedItem());
+
+	// 현재 FTP 디렉토리 비우기
+	ClearFtpDirectory(ftpConnection, strFtpCurrentPath, true);
+
+	// 로컬 디렉토리 업로드
+	UploadLocalDirectory(ftpConnection, strLocalPath, strFtpCurrentPath);
+}
+
+void CMFCApplication1Dlg::ClearLocalDirectory(const CString& strPath)
+{
+
+	CFileFind finder;
+	CString strWildcard = strPath + _T("\\*.*");
+
+	BOOL bWorking = finder.FindFile(strWildcard);
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		// "." 및 ".."을 무시
+		if (finder.IsDots())
+			continue;
+
+		CString strFilePath = finder.GetFilePath();
+		if (finder.IsDirectory())
+		{
+			// 하위 디렉토리 비우기
+			ClearLocalDirectory(strFilePath);
+
+			// 빈 디렉토리 삭제 시도
+			if (RemoveDirectory(strFilePath))
+			{
+				TRACE(_T("Successfully removed directory: %s\n"), strFilePath);
+			}
+			else
+			{
+				TRACE(_T("Failed to remove directory: %s\n"), strFilePath);
+			}
+		}
+		else
+		{
+			// 파일인 경우, 삭제
+			if (DeleteFile(strFilePath))
+			{
+				TRACE(_T("Successfully deleted file: %s\n"), strFilePath);
+			}
+			else
+			{
+				TRACE(_T("Failed to delete file: %s\n"), strFilePath);
+			}
+		}
+	}
+	finder.Close();
+}
+
+void CMFCApplication1Dlg::DownloadFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath, const CString& strLocalPath)
+{
+	// 인터넷 세션 객체 생성
+	CInternetSession internetSession;
+
+	// FTP 서버에 연결
+	CFtpConnection* ftpConnection = nullptr;
+
+
+	ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+	CString strSearchPath = strFtpPath;
+	if (strSearchPath.Right(1) != _T("/"))
+		strSearchPath += _T("/");
+
+	// FTP 파일 찾기 객체 생성
+	CFtpFileFind finder(ftpConnection);
+	BOOL bWorking = finder.FindFile(strSearchPath + _T("*"));
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		// "."과 ".."을 무시
+		if (finder.IsDots())
+			continue;
+
+		CString strFileName = finder.GetFileName();
+		CString strFtpFilePath = strSearchPath + strFileName;
+		CString strLocalFilePath = strLocalPath + _T("\\") + strFileName;
+
+		if (finder.IsDirectory())
+		{
+			// 로컬 디렉토리 생성
+			CreateDirectory(strLocalFilePath, NULL);
+
+			// 하위 디렉토리 다운로드
+			DownloadFtpDirectory(ftpConnection, strFtpFilePath, strLocalFilePath);
+		}
+		else
+		{
+			// 파일 다운로드
+			CFile localFile;
+			if (localFile.Open(strLocalFilePath, CFile::modeCreate | CFile::modeWrite))
+			{
+				// FTP 파일 다운로드
+				if (ftpConnection->GetFile(strFtpFilePath, strLocalFilePath))
+				{
+					TRACE(_T("Successfully downloaded file: %s\n"), strFtpFilePath);
+				}
+				else
+				{
+					TRACE(_T("Failed to download file: %s\n"), strFtpFilePath);
+				}
+				localFile.Close();
+			}
+		}
+	}
+	finder.Close();
+}
+
+
+void CMFCApplication1Dlg::OnBnClickedButton2()
+{
+	// FTP 서버에 연결
+	CInternetSession internetSession;
+	CFtpConnection* ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
+
+	// 현재 FTP 디렉토리 경로
+	CString strFtpCurrentPath = GetFullPathFromTreeItem2(m_TreeCtrl2.GetSelectedItem());
+	// 로컬 디렉토리 경로
+	CString strLocalPath = GetFullPathFromTreeItem(m_TreeCtrl.GetSelectedItem());
+
+	// 현재 FTP 디렉토리 비우기
+	ClearLocalDirectory(strLocalPath);
+
+	DownloadFtpDirectory(ftpConnection, strFtpCurrentPath, strLocalPath);
 }
