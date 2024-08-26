@@ -253,9 +253,7 @@ void CMFCApplication1Dlg::AppendTextToEditControl(CString newText)
 void CMFCApplication1Dlg::OnBnClickedButtonConnect()
 {
 	UpdateData(TRUE);
-
 	CInternetSession session(_T("FTPExampleSession"));
-
 	try
 	{
 		if (m_pFtpConnection != nullptr)
@@ -735,7 +733,7 @@ void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 
 
 
-////////////////////////////////////////////////////// 업로드/다운로드 메서드/////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////// 업로드/다운로드 메서드 /////////////////////////////////////////////////////////////////////////////
 
 /// <summary>
 /// 파일 업로드 메서드
@@ -908,7 +906,14 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 		
 		pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
 		AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
+		// 트리 컨트롤에 파일 추가
+		HTREEITEM hSelectedItem = m_TreeCtrl.GetSelectedItem();
+		if (hSelectedItem != NULL) {
+			m_TreeCtrl.InsertItem(m_ListCtrl2.GetItemText(nIndex, 0), hSelectedItem);
+			m_TreeCtrl.Expand(hSelectedItem, TVE_EXPAND); // 부모 노드를 확장하여 새 파일이 보이도록 함
+		}
 	}
+
 	catch (CInternetException* pEx) {
 		TCHAR szError[1024];
 		pEx->GetErrorMessage(szError, 1024);
@@ -1327,7 +1332,6 @@ void CMFCApplication1Dlg::UploadLocalDirectory(CFtpConnection* pFtpConnection, c
 /// </summary>
 void CMFCApplication1Dlg::OnBnClickedButton1()
 {
-	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
 	// FTP 서버에 연결
 	CInternetSession internetSession;
 	CFtpConnection* ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
@@ -1337,7 +1341,6 @@ void CMFCApplication1Dlg::OnBnClickedButton1()
 	// 로컬 디렉토리 경로
 	CString strLocalPath = GetFullPathFromTreeItem(m_TreeCtrl.GetSelectedItem());
 
-	// 현재 선택된 트리뷰 노드 가져오기
 	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
 	if (hSelectedItem == NULL)
 	{
@@ -1345,16 +1348,94 @@ void CMFCApplication1Dlg::OnBnClickedButton1()
 		return;
 	}
 
+	// 파일 수 계산 및 Progress Bar 초기화
+	int nTotalFiles = CountFilesInDirectory(strLocalPath);
+	CProgressCtrl* pProgressCtrl = (CProgressCtrl*)GetDlgItem(IDC_PROGRESS1);
+	pProgressCtrl->SetRange(0, nTotalFiles);
+	pProgressCtrl->SetPos(0);
+
 	// 현재 FTP 디렉토리 비우기
 	ClearFtpDirectory(ftpConnection, strFtpCurrentPath, true);
 
 	// 로컬 디렉토리 업로드
-	UploadLocalDirectory(ftpConnection, strLocalPath, strFtpCurrentPath);
-	// 부모 노드 아래의 모든 자식 노드를 삭제
+	UploadLocalDirectoryWithProgress(ftpConnection, strLocalPath, strFtpCurrentPath, pProgressCtrl);
+
+	// FTP Tree Control 갱신
 	DeleteAllChildItems(m_TreeCtrl2, hSelectedItem);
 	LoadFTPDirectoryStructure(ftpConnection, strFtpCurrentPath, hSelectedItem);
 	AppendTextToEditControl(GetFormattedCurrentTime() + _T(" 폴더 동기화 완료! (client -> server)\n"));
 	AfxMessageBox(_T("노드를 한번 클릭해 List Control을 업데이트 시켜주세요!"));
+}
+
+void CMFCApplication1Dlg::UploadLocalDirectoryWithProgress(CFtpConnection* pFtpConnection, const CString& strLocalPath, const CString& strFtpPath, CProgressCtrl* pProgressCtrl)
+{
+	CFileFind finder;
+	CString strWildcard(strLocalPath);
+	strWildcard += _T("\\*.*");
+
+	BOOL bWorking = finder.FindFile(strWildcard);
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		if (finder.IsDots())
+			continue;
+
+		CString strFilePath = finder.GetFilePath();
+		CString strFileName = finder.GetFileName();
+		CString strFtpFilePath = strFtpPath + _T("/") + strFileName;
+
+		if (finder.IsDirectory())
+		{
+			if (!pFtpConnection->CreateDirectory(strFtpFilePath))
+			{
+				TRACE(_T("Failed to create directory: %s\n"), strFtpFilePath);
+			}
+			UploadLocalDirectoryWithProgress(pFtpConnection, strFilePath, strFtpFilePath, pProgressCtrl);
+		}
+		else
+		{
+			if (!pFtpConnection->PutFile(strFilePath, strFtpFilePath))
+			{
+				TRACE(_T("Failed to upload file: %s\n"), strFilePath);
+			}
+
+			// Progress Bar 업데이트
+			pProgressCtrl->SetPos(pProgressCtrl->GetPos() + 1);
+		}
+	}
+	finder.Close();
+}
+
+int CMFCApplication1Dlg::CountFilesInDirectory(const CString& strPath)
+{
+	int nCount = 0;
+	CFileFind finder;
+	CString strWildcard(strPath);
+	strWildcard += _T("\\*.*");
+
+	BOOL bWorking = finder.FindFile(strWildcard);
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		if (finder.IsDots())
+			continue;
+
+		if (finder.IsDirectory())
+		{
+			nCount += CountFilesInDirectory(finder.GetFilePath());
+		}
+		else
+		{
+			nCount++;
+		}
+	}
+	finder.Close();
+
+	return nCount;
 }
 
 void CMFCApplication1Dlg::ClearLocalDirectory(const CString& strPath)
@@ -1464,6 +1545,46 @@ void CMFCApplication1Dlg::DownloadFtpDirectory(CFtpConnection* pFtpConnection, c
 	finder.Close();
 }
 
+void CMFCApplication1Dlg::DownloadFtpDirectoryWithProgress(CFtpConnection* pFtpConnection, const CString& strFtpPath, const CString& strLocalPath, CProgressCtrl* pProgressCtrl)
+{
+	CFtpFileFind finder(pFtpConnection);
+	CString strSearchPath = strFtpPath;
+	if (strSearchPath.Right(1) != _T("/"))
+		strSearchPath += _T("/");
+
+	BOOL bWorking = finder.FindFile(strSearchPath + _T("*"));
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		if (finder.IsDots())
+			continue;
+
+		CString strFileName = finder.GetFileName();
+		CString strFtpFilePath = strSearchPath + strFileName;
+		CString strLocalFilePath = strLocalPath + _T("\\") + strFileName;
+
+		if (finder.IsDirectory())
+		{
+			CreateDirectory(strLocalFilePath, NULL);
+			DownloadFtpDirectoryWithProgress(pFtpConnection, strFtpFilePath, strLocalFilePath, pProgressCtrl);
+		}
+		else
+		{
+			if (!pFtpConnection->GetFile(strFtpFilePath, strLocalFilePath))
+			{
+				TRACE(_T("Failed to download file: %s\n"), strFtpFilePath);
+			}
+
+			// Progress Bar 업데이트
+			pProgressCtrl->SetPos(pProgressCtrl->GetPos() + 1);
+		}
+	}
+	finder.Close();
+}
+
+
 /// <summary>
 /// 서버 -> 로컬 동기화 메서드
 /// </summary>
@@ -1473,12 +1594,9 @@ void CMFCApplication1Dlg::OnBnClickedButton2()
 	CInternetSession internetSession;
 	CFtpConnection* ftpConnection = internetSession.GetFtpConnection(m_editIP, m_editID, m_editPW);
 
-	// 현재 FTP 디렉토리 경로
 	CString strFtpCurrentPath = GetFullPathFromTreeItem2(m_TreeCtrl2.GetSelectedItem());
-	// 로컬 디렉토리 경로
 	CString strLocalPath = GetFullPathFromTreeItem(m_TreeCtrl.GetSelectedItem());
 
-	// 현재 선택된 트리뷰 노드 가져오기
 	HTREEITEM hSelectedItem = m_TreeCtrl.GetSelectedItem();
 	if (hSelectedItem == NULL)
 	{
@@ -1486,23 +1604,52 @@ void CMFCApplication1Dlg::OnBnClickedButton2()
 		return;
 	}
 
-	// 로컬 디렉토리 비우기
+	// 파일 수 계산 및 Progress Bar 초기화
+	int nTotalFiles = CountFilesInFtpDirectory(ftpConnection, strFtpCurrentPath);
+	CProgressCtrl* pProgressCtrl = (CProgressCtrl*)GetDlgItem(IDC_PROGRESS1);
+	pProgressCtrl->SetRange(0, nTotalFiles);
+	pProgressCtrl->SetPos(0);
+
 	ClearLocalDirectory(strLocalPath);
+	DownloadFtpDirectoryWithProgress(ftpConnection, strFtpCurrentPath, strLocalPath, pProgressCtrl);
 
-	// FTP에서 파일 다운로드
-	DownloadFtpDirectory(ftpConnection, strFtpCurrentPath, strLocalPath);
-
-	// 부모 노드 아래의 모든 자식 노드를 삭제
 	DeleteAllChildItems(m_TreeCtrl, hSelectedItem);
-
-	// 새롭게 로드된 디렉토리 구조 추가
 	LoadDirectoryStructure(strLocalPath, hSelectedItem);
 
-	// 메시지 출력
 	AppendTextToEditControl(GetFormattedCurrentTime() + _T(" 폴더 동기화 완료! (server -> client)\n"));
 	AfxMessageBox(_T("노드를 한번 클릭해 List Control을 업데이트 시켜주세요!"));
 }
 
+int CMFCApplication1Dlg::CountFilesInFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath)
+{
+	int nCount = 0;
+	CFtpFileFind finder(pFtpConnection);
+	CString strSearchPath = strFtpPath;
+	if (strSearchPath.Right(1) != _T("/"))
+		strSearchPath += _T("/");
+
+	BOOL bWorking = finder.FindFile(strSearchPath + _T("*"));
+
+	while (bWorking)
+	{
+		bWorking = finder.FindNextFile();
+
+		if (finder.IsDots())
+			continue;
+
+		if (finder.IsDirectory())
+		{
+			nCount += CountFilesInFtpDirectory(pFtpConnection, finder.GetFilePath());
+		}
+		else
+		{
+			nCount++;
+		}
+	}
+	finder.Close();
+
+	return nCount;
+}
 
 // 자식 노드를 모두 삭제하는 함수
 void CMFCApplication1Dlg::DeleteAllChildItems(CTreeCtrl& treeCtrl, HTREEITEM hParentItem)

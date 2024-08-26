@@ -109,8 +109,12 @@ public:
 	CProgressCtrl m_ProgressCtrl;
 	
 	afx_msg void OnBnClickedButton1();
+	void UploadLocalDirectoryWithProgress(CFtpConnection* pFtpConnection, const CString& strLocalPath, const CString& strFtpPath, CProgressCtrl* pProgressCtrl);
+	int CountFilesInDirectory(const CString& strPath);
 	void ClearLocalDirectory(const CString& strPath);
 	void DownloadFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath, const CString& strLocalPath);
+	void DownloadFtpDirectoryWithProgress(CFtpConnection* pFtpConnection, const CString& strFtpPath, const CString& strLocalPath, CProgressCtrl* pProgressCtrl);
 	afx_msg void OnBnClickedButton2();
+	int CountFilesInFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath);
 	void DeleteAllChildItems(CTreeCtrl& treeCtrl, HTREEITEM hParentItem);
 };
