@@ -112,4 +112,5 @@ public:
 	void ClearLocalDirectory(const CString& strPath);
 	void DownloadFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath, const CString& strLocalPath);
 	afx_msg void OnBnClickedButton2();
+	void DeleteAllChildItems(CTreeCtrl& treeCtrl, HTREEITEM hParentItem);
 };

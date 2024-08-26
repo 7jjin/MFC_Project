@@ -65,8 +65,8 @@ END_MESSAGE_MAP()
 
 CMFCApplication1Dlg::CMFCApplication1Dlg(CWnd* pParent /*=nullptr*/)
 	: CDialogEx(IDD_MFCAPPLICATION1_DIALOG, pParent)
-	, m_editIP(_T("192.168.0.5"))
-	, m_editID(_T("FTP_user"))
+	, m_editIP(_T("127.0.0.1"))
+	, m_editID(_T("test"))
 	, m_editPW(_T("1234"))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
@@ -131,7 +131,7 @@ BOOL CMFCApplication1Dlg::OnInitDialog()
 	m_ListCtrl2.InsertColumn(3, _T("Size"), LVCFMT_RIGHT, rt.Width() * 0.2);
 
 	// 디렉토리 로드를 시작할 경로를 설정합니다. 예를 들어, C:\부터 시작할 수 있습니다.
-	CString strInitialPath = _T("C:\\Test");
+	CString strInitialPath = _T("C:\\");
 	LoadDirectoryStructure(strInitialPath, TVI_ROOT);
 
 	return TRUE;
@@ -219,6 +219,10 @@ CString GetFormattedCurrentTime()
 	return strTime;
 }
 
+/// <summary>
+/// LogText에 글 추가 메서드
+/// </summary>
+/// <param name="newText"></param>
 void CMFCApplication1Dlg::AppendTextToEditControl(CString newText)
 {
     // Edit Control의 현재 텍스트를 가져옴
@@ -286,6 +290,7 @@ void CMFCApplication1Dlg::OnBnClickedButtonDisconnect()
 		delete m_pFtpConnection;
 		m_pFtpConnection = nullptr;
 		AppendTextToEditControl(GetFormattedCurrentTime() + _T("FTP 연결이 해제되었습니다."));
+		AfxMessageBox(_T("FTP 연결이 해제되었습니다."));
 	}
 	else
 	{
@@ -406,7 +411,7 @@ CString CMFCApplication1Dlg::GetFullPathFromTreeItem(HTREEITEM hItem)
 	}
 
 	// 루트 경로를 추가 (C 드라이브 가정)
-	strPath = _T("C:\\Test") + strPath;
+	strPath = _T("C:\\") + strPath;
 
 	m_localPath.SetWindowTextW(strPath);
 
@@ -651,7 +656,6 @@ void CMFCApplication1Dlg::OnLButtonDown(UINT nFlags, CPoint point)
 
 	CString msg;
 	msg.Format(_T("Focused Control: %p"), pWnd);
-	AfxMessageBox(msg); // 현재 포커스된 컨트롤이 무엇인지 확인
 	// List Control에서의 클릭인지 확인
 	if (pWnd == &m_ListCtrl || pWnd == &m_ListCtrl2)
 	{
@@ -701,13 +705,6 @@ void CMFCApplication1Dlg::OnLButtonUp(UINT nFlags, CPoint point)
 		ClientToScreen(&point);
 		CWnd* pDropWnd = WindowFromPoint(point);
 
-		// 디버깅용 로그 출력
-		TRACE("pDropWnd address: %p\n", pDropWnd);
-		TRACE("&m_ListCtrl address: %p\n", &m_ListCtrl);
-		TRACE("&m_ListCtrl2 address: %p\n", &m_ListCtrl2);
-		TRACE("pDropWnd HWND: %p\n", pDropWnd->GetSafeHwnd());
-		TRACE("m_ListCtrl HWND: %p\n", m_ListCtrl.GetSafeHwnd());
-		TRACE("m_ListCtrl2 HWND: %p\n", m_ListCtrl2.GetSafeHwnd());
 
 		// pDropWnd가 m_ListCtrl2를 가리키는지 확인
 		if (pDropWnd->GetSafeHwnd() == m_ListCtrl2.GetSafeHwnd()) {
@@ -789,7 +786,7 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 
 		// 프로그래스 바를 100%로 설정
 		pProgressCtrl->SetPos(100);
-
+		AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl.GetItemText(nIndex, 0) + _T(" 파일 업로드 완료!\n"));
 		// 파일 닫기
 		remoteFile->Close();
 		delete remoteFile;
@@ -955,7 +952,7 @@ void CMFCApplication1Dlg::UploadFolderFromFtp(int nIndex)
 	BOOL result = ftpConnection->CreateDirectory(strRemoteFilePath);
 	if (!result)
 	{
-		AfxMessageBox(_T("폴더가 생성되지 않았습니다."));
+		AfxMessageBox(_T("같은 폴더가 존재합니다."));
 		return;
 	}
 
@@ -1078,7 +1075,7 @@ void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
 	BOOL result = CreateDirectory(strLocalFilePath, NULL);
 	if (!result)
 	{
-		AfxMessageBox(_T("폴더가 생성되지 않았습니다."));
+		AfxMessageBox(_T("같은 폴더가 존재합니다."));
 		return;
 	}
 
@@ -1325,6 +1322,9 @@ void CMFCApplication1Dlg::UploadLocalDirectory(CFtpConnection* pFtpConnection, c
 	finder.Close();
 }
 
+/// <summary>
+/// 로컬 -> 서버 동기화 메서드
+/// </summary>
 void CMFCApplication1Dlg::OnBnClickedButton1()
 {
 	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
@@ -1337,11 +1337,24 @@ void CMFCApplication1Dlg::OnBnClickedButton1()
 	// 로컬 디렉토리 경로
 	CString strLocalPath = GetFullPathFromTreeItem(m_TreeCtrl.GetSelectedItem());
 
+	// 현재 선택된 트리뷰 노드 가져오기
+	HTREEITEM hSelectedItem = m_TreeCtrl2.GetSelectedItem();
+	if (hSelectedItem == NULL)
+	{
+		AfxMessageBox(_T("트리에서 업데이트할 디렉토리를 선택하세요."));
+		return;
+	}
+
 	// 현재 FTP 디렉토리 비우기
 	ClearFtpDirectory(ftpConnection, strFtpCurrentPath, true);
 
 	// 로컬 디렉토리 업로드
 	UploadLocalDirectory(ftpConnection, strLocalPath, strFtpCurrentPath);
+	// 부모 노드 아래의 모든 자식 노드를 삭제
+	DeleteAllChildItems(m_TreeCtrl2, hSelectedItem);
+	LoadFTPDirectoryStructure(ftpConnection, strFtpCurrentPath, hSelectedItem);
+	AppendTextToEditControl(GetFormattedCurrentTime() + _T(" 폴더 동기화 완료! (client -> server)\n"));
+	AfxMessageBox(_T("노드를 한번 클릭해 List Control을 업데이트 시켜주세요!"));
 }
 
 void CMFCApplication1Dlg::ClearLocalDirectory(const CString& strPath)
@@ -1451,7 +1464,9 @@ void CMFCApplication1Dlg::DownloadFtpDirectory(CFtpConnection* pFtpConnection, c
 	finder.Close();
 }
 
-
+/// <summary>
+/// 서버 -> 로컬 동기화 메서드
+/// </summary>
 void CMFCApplication1Dlg::OnBnClickedButton2()
 {
 	// FTP 서버에 연결
@@ -1463,8 +1478,41 @@ void CMFCApplication1Dlg::OnBnClickedButton2()
 	// 로컬 디렉토리 경로
 	CString strLocalPath = GetFullPathFromTreeItem(m_TreeCtrl.GetSelectedItem());
 
-	// 현재 FTP 디렉토리 비우기
+	// 현재 선택된 트리뷰 노드 가져오기
+	HTREEITEM hSelectedItem = m_TreeCtrl.GetSelectedItem();
+	if (hSelectedItem == NULL)
+	{
+		AfxMessageBox(_T("트리에서 업데이트할 디렉토리를 선택하세요."));
+		return;
+	}
+
+	// 로컬 디렉토리 비우기
 	ClearLocalDirectory(strLocalPath);
 
+	// FTP에서 파일 다운로드
 	DownloadFtpDirectory(ftpConnection, strFtpCurrentPath, strLocalPath);
+
+	// 부모 노드 아래의 모든 자식 노드를 삭제
+	DeleteAllChildItems(m_TreeCtrl, hSelectedItem);
+
+	// 새롭게 로드된 디렉토리 구조 추가
+	LoadDirectoryStructure(strLocalPath, hSelectedItem);
+
+	// 메시지 출력
+	AppendTextToEditControl(GetFormattedCurrentTime() + _T(" 폴더 동기화 완료! (server -> client)\n"));
+	AfxMessageBox(_T("노드를 한번 클릭해 List Control을 업데이트 시켜주세요!"));
+}
+
+
+// 자식 노드를 모두 삭제하는 함수
+void CMFCApplication1Dlg::DeleteAllChildItems(CTreeCtrl& treeCtrl, HTREEITEM hParentItem)
+{
+	HTREEITEM hChildItem = treeCtrl.GetChildItem(hParentItem);
+
+	while (hChildItem != NULL)
+	{
+		HTREEITEM hNextItem = treeCtrl.GetNextSiblingItem(hChildItem);
+		treeCtrl.DeleteItem(hChildItem);
+		hChildItem = hNextItem;
+	}
 }
