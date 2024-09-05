@@ -43,7 +43,8 @@ public:
 	int m_nDragIndex;
 	CWnd* m_pDropWnd;
 	CPoint m_ptDropPoint;
-
+	_ConnectionPtr pConn;
+	_RecordsetPtr pRecordset;
 // 구현입니다.
 protected:
 	HICON m_hIcon;
@@ -72,12 +73,14 @@ public:
 	int g_totalFiles = 0;
 	int g_uploadedFiles = 0;
 	int g_downloadedFiles = 0;
+
 	
 	CFtpConnection* m_pFtpConnection;	// ftp 연결 유무
 public:
 	afx_msg void OnBnClickedButtonDisconnect();
 	afx_msg
-		void AppendTextToEditControl(CString newText);
+		//void AppendTextToEditControl(CString newText);
+	void AppendTextToEditControl(CString date, CString newText);
 	void OnBnClickedButtonConnect();
 	void LoadDirectoryStructure(const CString& strPath, HTREEITEM hParentItem);
 	void LoadFTPDirectoryStructure(CFtpConnection* pFtpConnection, const CString& strPath, HTREEITEM hParentItem);
@@ -117,4 +120,6 @@ public:
 	afx_msg void OnBnClickedButton2();
 	int CountFilesInFtpDirectory(CFtpConnection* pFtpConnection, const CString& strFtpPath);
 	void DeleteAllChildItems(CTreeCtrl& treeCtrl, HTREEITEM hParentItem);
+	afx_msg void OnEnChangeEdit1();
+	afx_msg void OnBnClickedButtonHistory();
 };

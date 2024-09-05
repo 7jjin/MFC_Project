@@ -9,7 +9,7 @@
 #include "afxinet.h"
 #include "ShlObj.h"
 #include "direct.h"
-
+#include "CDBList.h"
 
 #ifdef _DEBUG
 #define new DEBUG_NEW
@@ -38,6 +38,8 @@ protected:
 	int m_nDragIndex;
 	CWnd* m_pDropWnd;
 	CPoint m_ptDropPoint;
+	_ConnectionPtr pConn;
+	_RecordsetPtr pRecordset;
 	// 구현입니다.
 protected:
 	DECLARE_MESSAGE_MAP()
@@ -70,7 +72,9 @@ CMFCApplication1Dlg::CMFCApplication1Dlg(CWnd* pParent /*=nullptr*/)
 	, m_editPW(_T("1234"))
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	CoInitialize(NULL);
 }
+
 
 void CMFCApplication1Dlg::DoDataExchange(CDataExchange* pDX)
 {
@@ -105,6 +109,8 @@ BEGIN_MESSAGE_MAP(CMFCApplication1Dlg, CDialogEx)
 	ON_NOTIFY(LVN_BEGINDRAG, IDC_LIST2, &CMFCApplication1Dlg::OnLvnBegindragList2)
 	ON_BN_CLICKED(IDC_BUTTON1, &CMFCApplication1Dlg::OnBnClickedButton1)
 	ON_BN_CLICKED(IDC_BUTTON2, &CMFCApplication1Dlg::OnBnClickedButton2)
+	ON_EN_CHANGE(IDC_EDIT1, &CMFCApplication1Dlg::OnEnChangeEdit1)
+	ON_BN_CLICKED(IDC_BUTTON_History, &CMFCApplication1Dlg::OnBnClickedButtonHistory)
 END_MESSAGE_MAP()
 
 
@@ -113,6 +119,26 @@ END_MESSAGE_MAP()
 BOOL CMFCApplication1Dlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
+
+	SetWindowText(_T("FTP 프로그램"));
+
+	// ADO 초기화
+	CoInitialize(NULL);
+
+	// DB 연결
+	HRESULT hr = pConn.CreateInstance(__uuidof(Connection));
+
+	if (SUCCEEDED(hr)) {
+		try {
+			pConn->Open("Provider=SQLOLEDB;Data Source=192.168.0.6;Initial Catalog=bems_db;User Id=bems_user;Password=fhwl123!@#;", "", "", adConnectUnspecified);
+		}
+		catch (_com_error& e) {
+			AfxMessageBox(e.Description());
+		}
+	}
+	else {
+		AfxMessageBox(_T("Filed to create connection instance."));
+	}
 
 	// List Control 초기화
 	CRect rt;
@@ -223,7 +249,7 @@ CString GetFormattedCurrentTime()
 /// LogText에 글 추가 메서드
 /// </summary>
 /// <param name="newText"></param>
-void CMFCApplication1Dlg::AppendTextToEditControl(CString newText)
+void CMFCApplication1Dlg::AppendTextToEditControl(CString date ,CString newText)
 {
     // Edit Control의 현재 텍스트를 가져옴
     CString currentText;
@@ -234,7 +260,15 @@ void CMFCApplication1Dlg::AppendTextToEditControl(CString newText)
     {
         currentText += _T("\r\n");
     }
-    currentText += newText;
+    currentText += date + newText;
+	try {
+		CString query;
+		query.Format(_T("INSERT INTO dbo.LogHistory (EventDateTime,LogText) VALUES ('%s','%s')"), date, newText);
+		pConn->Execute((LPCTSTR)query, NULL, adCmdText);
+	}
+	catch (_com_error& e) {
+		AfxMessageBox(e.Description());
+	}
 
     // Edit Control에 업데이트된 텍스트 설정
 	m_Logtext.SetWindowText(currentText);
@@ -264,7 +298,7 @@ void CMFCApplication1Dlg::OnBnClickedButtonConnect()
 		}
 
 		m_pFtpConnection = session.GetFtpConnection(m_editIP, m_editID, m_editPW);
-		AppendTextToEditControl(GetFormattedCurrentTime() +_T("FTP 연결 성공\n"));
+		AppendTextToEditControl(GetFormattedCurrentTime() , _T("FTP 연결 성공\n"));
 		AfxMessageBox(_T("FTP 연결 성공"));
 
 		// FTP 디렉토리 트리 로드
@@ -287,7 +321,7 @@ void CMFCApplication1Dlg::OnBnClickedButtonDisconnect()
 		m_pFtpConnection->Close();
 		delete m_pFtpConnection;
 		m_pFtpConnection = nullptr;
-		AppendTextToEditControl(GetFormattedCurrentTime() + _T("FTP 연결이 해제되었습니다."));
+		AppendTextToEditControl(GetFormattedCurrentTime() , _T("FTP 연결이 해제되었습니다."));
 		AfxMessageBox(_T("FTP 연결이 해제되었습니다."));
 	}
 	else
@@ -784,7 +818,7 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 
 		// 프로그래스 바를 100%로 설정
 		pProgressCtrl->SetPos(100);
-		AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl.GetItemText(nIndex, 0) + _T(" 파일 업로드 완료!\n"));
+		AppendTextToEditControl(GetFormattedCurrentTime() , m_ListCtrl.GetItemText(nIndex, 0) + _T(" 파일 업로드 완료!\n"));
 		// 파일 닫기
 		remoteFile->Close();
 		delete remoteFile;
@@ -820,7 +854,7 @@ void CMFCApplication1Dlg::UploadFileToFtp(int nIndex)
 		localFile.Close();
 		remoteFile->Close();
 		delete remoteFile;
-		m_Logtext.SetWindowText(GetFormattedCurrentTime() + m_ListCtrl.GetItemText(nIndex, 0) + _T(" 파일 업로드 완료!\n"));
+		m_Logtext.SetWindowText(GetFormattedCurrentTime() +m_ListCtrl.GetItemText(nIndex, 0) + _T(" 파일 업로드 완료!\n"));
 	}
 }
 
@@ -878,7 +912,7 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 			remoteFile->Close();
 			delete remoteFile;
 			pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
-			AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
+			AppendTextToEditControl(GetFormattedCurrentTime() , m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
 			return;
 		}
 
@@ -905,7 +939,7 @@ void CMFCApplication1Dlg::DownloadFileFromFtp(int nIndex)
 
 		
 		pProgressCtrl->SetPos(100); // 프로그래스 바를 100%로 설정
-		AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
+		AppendTextToEditControl(GetFormattedCurrentTime() , m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 파일 다운로드 완료!\n"));
 		// 트리 컨트롤에 파일 추가
 		HTREEITEM hSelectedItem = m_TreeCtrl.GetSelectedItem();
 		if (hSelectedItem != NULL) {
@@ -972,7 +1006,7 @@ void CMFCApplication1Dlg::UploadFolderFromFtp(int nIndex)
 
 	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 업로드
 	UploadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
-	AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl.GetItemText(nIndex, 0) + _T(" 폴더 업로드 완료!\n"));
+	AppendTextToEditControl(GetFormattedCurrentTime() , m_ListCtrl.GetItemText(nIndex, 0) + _T(" 폴더 업로드 완료!\n"));
 
 }
 
@@ -1096,7 +1130,7 @@ void CMFCApplication1Dlg::DownloadFolderFromFtp(int nIndex)
 	// 로컬 폴더 내의 파일 및 폴더를 재귀적으로 FTP 서버로 다운로드
 	DownloadFolderContents(strLocalFilePath, strRemoteFilePath, ftpConnection, pProgressCtrl);
 
-	AppendTextToEditControl(GetFormattedCurrentTime() + m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 폴더 다운로드 완료!\n"));
+	AppendTextToEditControl(GetFormattedCurrentTime() , m_ListCtrl2.GetItemText(nIndex, 0) + _T(" 폴더 다운로드 완료!\n"));
 }
 
 /// <summary>
@@ -1363,7 +1397,7 @@ void CMFCApplication1Dlg::OnBnClickedButton1()
 	// FTP Tree Control 갱신
 	DeleteAllChildItems(m_TreeCtrl2, hSelectedItem);
 	LoadFTPDirectoryStructure(ftpConnection, strFtpCurrentPath, hSelectedItem);
-	AppendTextToEditControl(GetFormattedCurrentTime() + _T(" 폴더 동기화 완료! (client -> server)\n"));
+	AppendTextToEditControl(GetFormattedCurrentTime() , _T(" 폴더 동기화 완료! (client -> server)\n"));
 	AfxMessageBox(_T("노드를 한번 클릭해 List Control을 업데이트 시켜주세요!"));
 }
 
@@ -1616,7 +1650,7 @@ void CMFCApplication1Dlg::OnBnClickedButton2()
 	DeleteAllChildItems(m_TreeCtrl, hSelectedItem);
 	LoadDirectoryStructure(strLocalPath, hSelectedItem);
 
-	AppendTextToEditControl(GetFormattedCurrentTime() + _T(" 폴더 동기화 완료! (server -> client)\n"));
+	AppendTextToEditControl(GetFormattedCurrentTime() , _T(" 폴더 동기화 완료! (server -> client)\n"));
 	AfxMessageBox(_T("노드를 한번 클릭해 List Control을 업데이트 시켜주세요!"));
 }
 
@@ -1662,4 +1696,22 @@ void CMFCApplication1Dlg::DeleteAllChildItems(CTreeCtrl& treeCtrl, HTREEITEM hPa
 		treeCtrl.DeleteItem(hChildItem);
 		hChildItem = hNextItem;
 	}
+}
+
+
+void CMFCApplication1Dlg::OnEnChangeEdit1()
+{
+	// TODO:  RICHEDIT 컨트롤인 경우, 이 컨트롤은
+	// CDialogEx::OnInitDialog() 함수를 재지정 
+	//하고 마스크에 OR 연산하여 설정된 ENM_CHANGE 플래그를 지정하여 CRichEditCtrl().SetEventMask()를 호출하지 않으면
+	// 이 알림 메시지를 보내지 않습니다.
+
+	// TODO:  여기에 컨트롤 알림 처리기 코드를 추가합니다.
+}
+
+
+void CMFCApplication1Dlg::OnBnClickedButtonHistory()
+{
+	CDBList dlg;
+	dlg.DoModal();
 }
